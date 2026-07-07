@@ -1,0 +1,11 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="DesktopIconSorter.vcxproj" Id="514df7f8-07bd-436f-8276-f859809b74ef" />
+  <Project Path="ShellExt/ShellExt.vcxproj" Id="b1c2d3e4-f5a6-7890-bcde-f12345678901">
+    <BuildType Project="Release" />
+    <Platform Project="x64" />
+  </Project>
+</Solution>

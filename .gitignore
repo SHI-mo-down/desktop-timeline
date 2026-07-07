@@ -1,0 +1,40 @@
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.db
+*.db-wal
+*.db-shm
+
+# Build output
+*/x64/
+*/Release/
+*/Debug/
+*.tlog/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.iobj
+*.ipdb
+*.recipe
+*.lastbuildstate
+*.log
+
+# Precompiled header
+*/ipch/
+*.ipch
+
+# VS solution cache
+FileContentIndex/
+DocumentLayout.json
+DocumentLayout.backup.json
+
+# Third-party (not part of this project)
+NanaZip-main/
+ExplorerPatcher-master/
+IconSorterTests/
+
+# Old temp/plan files
+.hermes/
+.claude/

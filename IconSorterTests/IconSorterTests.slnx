@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="IconSorterTests.vcxproj" Id="3e774eac-8fd7-481a-a934-c59fcf018ad9" />
+</Solution>

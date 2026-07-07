@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "name": "Example: Shortcuts left, documents right, folders bottom-left",
+  "on_startup": "none",
+  "on_new_icon": "place",
+  "default_zone": "other",
+  "zones": [
+    {
+      "name": "shortcuts",
+      "x": 0, "y": 0, "w": 25, "h": 75,
+      "unit": "percent",
+      "match": [".lnk", ".url"],
+      "exclude": [],
+      "match_mode": "extension",
+      "fill": "column",
+      "sort": "name",
+      "sort_dir": "asc",
+      "spacing_x": 0,
+      "spacing_y": 0,
+      "monitor": 0
+    },
+    {
+      "name": "folders",
+      "x": 0, "y": 75, "w": 25, "h": 25,
+      "unit": "percent",
+      "match": ["*"],
+      "exclude": [".lnk", ".url", ".tmp"],
+      "match_mode": "folder",
+      "fill": "row",
+      "sort": "name",
+      "sort_dir": "asc",
+      "spacing_x": 4,
+      "spacing_y": 4,
+      "monitor": 0
+    },
+    {
+      "name": "documents",
+      "x": 25, "y": 0, "w": 55, "h": 100,
+      "unit": "percent",
+      "match": [".docx", ".pdf", ".xlsx", ".pptx", ".txt", ".md", ".csv", ".json", ".xml"],
+      "match_mode": "extension",
+      "fill": "row",
+      "sort": "date",
+      "sort_dir": "desc",
+      "spacing_x": 8,
+      "spacing_y": 0,
+      "monitor": 0
+    },
+    {
+      "name": "other",
+      "x": 80, "y": 0, "w": 20, "h": 100,
+      "unit": "percent",
+      "match": ["*"],
+      "exclude": [],
+      "match_mode": "name",
+      "fill": "column",
+      "sort": "none",
+      "monitor": 0
+    }
+  ]
+}
