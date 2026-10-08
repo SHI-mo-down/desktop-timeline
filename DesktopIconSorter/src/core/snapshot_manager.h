@@ -36,12 +36,6 @@ bool Snapshot_Undo();
 // List all snapshots, sorted by time (newest first)
 std::vector<SnapshotInfo> Snapshot_List();
 
-// Delete a snapshot by file name
-bool Snapshot_Delete(const wchar_t* fileName);
 
-// Get the most recent snapshot name (for display)
-bool Snapshot_GetLatest(SnapshotInfo* out);
 
 // Create a backup before a potential layout change
-// Used by polling auto-detect
-void Snapshot_BackupBeforeChange();

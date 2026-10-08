@@ -111,17 +111,20 @@ void ShowTrayMenu(HWND hwnd) {
 }
 
 // ── Legacy sort (kept for manual use) ──
+static SortResult SortIcons(int sortMode) {
+    GridSystem_Init();
+    AppConfig cfg = Config_Load(g_configPath);
+    if (cfg.partitions.empty()) cfg = Config_CreateDefault();
+    if (sortMode >= 0 && sortMode <= 3 && !cfg.partitions.empty())
+        cfg.partitions[0].sortMode = sortMode;
+    return ExecuteMultiPartitionSort(cfg.partitions);
+}
+
 void DoSort() {
     Snapshot_AutoSave();
-    GridSystem_Init();
-    g_config = Config_Load(g_configPath);
-    if (g_config.partitions.empty()) g_config = Config_CreateDefault();
-    Snapshot_AutoSave();
-    ExecuteMultiPartitionSort(g_config.partitions);
+    SortIcons(-1);
     Sleep(1000);
-
-    HWND hwndDesktop = FindWindowW(L"Progman", L"Program Manager");
-    if (hwndDesktop) { InvalidateRect(hwndDesktop, nullptr, TRUE); UpdateWindow(hwndDesktop); }
+    RefreshDesktopView();
 }
 
 // ── Window procedure ──
@@ -447,15 +450,10 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
         int mode = -1;
         if (wcslen(argv[1]) > 6 && argv[1][5] == L':')
             mode = _wtoi(argv[1] + 6);
-        GridSystem_Init();
-        g_config = Config_Load(g_configPath);
-        if (g_config.partitions.empty()) g_config = Config_CreateDefault();
-        if (mode >= 0 && mode <= 3 && !g_config.partitions.empty())
-            g_config.partitions[0].sortMode = mode;
         TimelineEngine_Init(g_exeDir, TimelineConfig::Default(), TimelineSaveSnapshot, nullptr);
         TimelineEngine_ForceRecord();
-        SortResult sr = ExecuteMultiPartitionSort(g_config.partitions);
-        wprintf(L"  Icons: %d  Sorted: %d\n", sr.totalIcons, sr.iconsSorted);
+        SortResult sr = SortIcons(mode);
+        PrintWF(L"  Icons: %d  Sorted: %d\n", sr.totalIcons, sr.iconsSorted);
     }
     else if (_wcsicmp(argv[1], L"/snap") == 0 && argc >= 3) {
         if (_wcsicmp(argv[2], L"save") == 0 && argc >= 4) {
@@ -483,16 +481,10 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
 int RunSilentSort(int sortMode) {
     InitPaths();
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-    GridSystem_Init();
-    AppConfig cfg = Config_Load(g_configPath);
-    if (cfg.partitions.empty()) cfg = Config_CreateDefault();
-    if (sortMode >= 0 && sortMode <= 3 && !cfg.partitions.empty())
-        cfg.partitions[0].sortMode = sortMode;
     TimelineEngine_Init(g_exeDir, TimelineConfig::Default(), TimelineSaveSnapshot, nullptr);
     TimelineEngine_ForceRecord();
-    ExecuteMultiPartitionSort(cfg.partitions);
-    HWND hwndDesktop = FindWindowW(L"Progman", L"Program Manager");
-    if (hwndDesktop) { InvalidateRect(hwndDesktop, nullptr, TRUE); UpdateWindow(hwndDesktop); }
+    SortIcons(sortMode);
+    RefreshDesktopView();
     CoUninitialize();
     return 0;
 }

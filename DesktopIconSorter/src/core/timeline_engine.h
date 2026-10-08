@@ -77,23 +77,12 @@ TimelineState TimelineEngine_Poll();
 // Returns the snapshot ID
 std::wstring TimelineEngine_ForceRecord();
 
-// Get the last recorded hash (for external use)
-DWORD TimelineEngine_GetLastHash();
 
-// Update engine configuration at runtime
 void TimelineEngine_UpdateConfig(const TimelineConfig& cfg);
-
-// Get current config
-const TimelineConfig& TimelineEngine_GetConfig();
 
 // Shutdown - cleanup resources
 void TimelineEngine_Shutdown();
 
-// Get current engine state as string
-const wchar_t* TimelineEngine_StateString();
-
-// Get pending change count (how many icons changed in current detection cycle)
-int TimelineEngine_GetPendingChangeCount();
 
 // Set active layout rules for automatic new-icon placement
 // Pass nullptr to disable auto-placement

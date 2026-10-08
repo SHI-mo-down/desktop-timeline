@@ -26,60 +26,26 @@ bool Snapshot_Init(const wchar_t* baseDir) {
 
 // Convert icon positions to a simple file format: Name|X|Y
 static bool WritePositionsToFile(const wchar_t* filePath) {
+    auto icons = GetDesktopIcons();
+    if (icons.empty()) return false;
+
     FILE* fp = nullptr;
     _wfopen_s(&fp, filePath, L"w, ccs=UTF-8");
     if (!fp) return false;
 
-    ComPtr<IFolderView> spFolderView;
-    IShellFolder* spShellFolder = nullptr;
-    IEnumIDList* spEnum = nullptr;
-    bool success = false;
-    int count = 0;
+    if (fwprintf(fp, L"Count:%zu\n", icons.size()) < 0) { fclose(fp); return false; }
 
-    if (FAILED(GetDesktopFolderView(&spFolderView))) goto cleanup;
-    if (FAILED(spFolderView->GetFolder(IID_IShellFolder, (void**)&spShellFolder))) goto cleanup;
-
-    spFolderView->ItemCount(SVGIO_ALLVIEW, &count);
-    if (fwprintf(fp, L"Count:%d\n", count) < 0) goto cleanup;
-
-    if (FAILED(spFolderView->Items(SVGIO_ALLVIEW, IID_IEnumIDList, (void**)&spEnum)) || !spEnum)
-        goto cleanup;
-
-    {
-        PITEMID_CHILD pidl = nullptr;
-        ULONG fetched = 0;
-        while (spEnum->Next(1, &pidl, &fetched) == S_OK && fetched > 0) {
-            if (pidl) {
-                STRRET strret;
-                wchar_t name[MAX_PATH] = L"Unknown";
-                if (SUCCEEDED(spShellFolder->GetDisplayNameOf(pidl, SHGDN_NORMAL, &strret)))
-                    StrRetToBuf(&strret, pidl, name, MAX_PATH);
-
-                for (wchar_t* p = name; *p; p++)
-                    if (*p == L'|' || *p == L'\n' || *p == L'\r') *p = L'_';
-
-                POINT pt = {0, 0};
-                if (SUCCEEDED(spFolderView->GetItemPosition(pidl, &pt))) {
-                    if (fwprintf(fp, L"%s|%d|%d\n", name, pt.x, pt.y) < 0) {
-                        CoTaskMemFree(pidl);
-                        goto cleanup;
-                    }
-                }
-                CoTaskMemFree(pidl);
-                pidl = nullptr;
-            }
+    for (const auto& icon : icons) {
+        std::wstring name = icon.name;
+        for (auto& c : name)
+            if (c == L'|' || c == L'\n' || c == L'\r') c = L'_';
+        if (fwprintf(fp, L"%s|%d|%d\n", name.c_str(), icon.x, icon.y) < 0) {
+            fclose(fp);
+            return false;
         }
     }
 
-    success = (fclose(fp) == 0);
-    fp = nullptr;
-    goto cleanup;
-
-cleanup:
-    if (spEnum) spEnum->Release();
-    if (spShellFolder) spShellFolder->Release();
-    if (fp) fclose(fp);
-    return success;
+    return fclose(fp) == 0;
 }
 
 // Load icon positions from a snapshot file
@@ -281,27 +247,4 @@ std::vector<SnapshotInfo> Snapshot_List() {
     });
 
     return result;
-}
-
-bool Snapshot_Delete(const wchar_t* fileName) {
-    return DeleteFileW(fileName) != 0;
-}
-
-bool Snapshot_GetLatest(SnapshotInfo* out) {
-    auto list = Snapshot_List();
-    if (list.empty()) return false;
-    *out = list[0];
-    return true;
-}
-
-// Backup helper: save current layout before a detected change
-static int g_backupCounter = 0;
-void Snapshot_BackupBeforeChange() {
-    wchar_t filePath[MAX_PATH];
-    SYSTEMTIME st;
-    GetLocalTime(&st);
-    wsprintfW(filePath, L"%s\\auto\\backup_%04d%02d%02d_%02d%02d%02d_%02d.snap",
-              g_snapshotDir, st.wYear, st.wMonth, st.wDay,
-              st.wHour, st.wMinute, st.wSecond, g_backupCounter++);
-    WritePositionsToFile(filePath);
 }

@@ -62,11 +62,6 @@ static HRESULT GetFolderView2(IFolderView2** pp) {
     return fv->QueryInterface(IID_IFolderView2, (void**)pp);
 }
 
-static void RefreshDesktop() {
-    HWND hwnd = FindWindowW(L"Progman", L"Program Manager");
-    if (hwnd) { InvalidateRect(hwnd, nullptr, TRUE); UpdateWindow(hwnd); }
-}
-
 // FWF_AUTOARRANGE = 0x1, FWF_SNAPTOGRID = 0x4 (shobjidl_core.h)
 static bool SetFlagBit(DWORD bit, bool on) {
     // Persist only if the bag value already exists — never overwrite a
@@ -80,7 +75,7 @@ static bool SetFlagBit(DWORD bit, bool on) {
     ComPtr<IFolderView2> fv2;
     HRESULT hr = GetFolderView2(&fv2);
     if (SUCCEEDED(hr)) hr = fv2->SetCurrentFolderFlags(bit, on ? bit : 0);
-    RefreshDesktop();
+    RefreshDesktopView();
     return SUCCEEDED(hr);
 }
 
@@ -139,7 +134,7 @@ bool Desktop_SetIconSize(int px) {
     ComPtr<IFolderView2> fv2;
     HRESULT hr = GetFolderView2(&fv2);
     if (SUCCEEDED(hr)) hr = fv2->SetViewModeAndIconSize(FVM_ICON, px);
-    RefreshDesktop();
+    RefreshDesktopView();
     return SUCCEEDED(hr);
 }
 

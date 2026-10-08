@@ -114,54 +114,18 @@ TimelineState TimelineEngine_Poll() {
 }
 
 // Compute a hash of current desktop icon layout
-// Reuses the same algorithm as the original main.cpp ComputeIconHash
 static DWORD ComputeLayoutHash() {
+    auto icons = GetDesktopIcons();
+    if (icons.empty()) return 0;
+
     DWORD hash = 0;
-
-    ComPtr<IFolderView> spFolderView;
-    if (FAILED(GetDesktopFolderView(&spFolderView))) return 0;
-
-    int count = 0;
-    spFolderView->ItemCount(SVGIO_ALLVIEW, &count);
-    if (count <= 0) return 0;
-
-    IShellFolder* sf = nullptr;
-    if (FAILED(spFolderView->GetFolder(IID_IShellFolder, (void**)&sf))) return 0;
-
-    IEnumIDList* spEnum = nullptr;
-    if (FAILED(spFolderView->Items(SVGIO_ALLVIEW, IID_IEnumIDList, (void**)&spEnum))) {
-        sf->Release();
-        return 0;
+    for (const auto& icon : icons) {
+        for (const wchar_t* c = icon.name.c_str(); *c; c++)
+            hash = hash * 31 + *c;
+        hash = hash * 31 + icon.x;
+        hash = hash * 31 + icon.y;
     }
-
-    PITEMID_CHILD pidl = nullptr;
-    ULONG fetched = 0;
-    int n = 0;
-    while (spEnum->Next(1, &pidl, &fetched) == S_OK && fetched > 0) {
-        if (pidl) {
-            // Hash name + position
-            STRRET strret;
-            wchar_t name[MAX_PATH] = L"";
-            if (SUCCEEDED(sf->GetDisplayNameOf(pidl, SHGDN_NORMAL, &strret)))
-                StrRetToBuf(&strret, pidl, name, MAX_PATH);
-
-            POINT pt = {0, 0};
-            spFolderView->GetItemPosition(pidl, &pt);
-
-            for (wchar_t* c = name; *c; c++)
-                hash = hash * 31 + *c;
-            hash = hash * 31 + pt.x;
-            hash = hash * 31 + pt.y;
-
-            CoTaskMemFree(pidl);
-            pidl = nullptr;
-            n++;
-        }
-    }
-
-    hash = hash * 31 + n;
-    spEnum->Release();
-    sf->Release();
+    hash = hash * 31 + (int)icons.size();
     return hash;
 }
 
@@ -208,42 +172,15 @@ static TimelineSnapshot CaptureCurrentLayout(const wchar_t* label) {
     ReleaseDC(nullptr, hdc);
 
     // Enumerate icons
-    ComPtr<IFolderView> spFolderView;
-    if (SUCCEEDED(GetDesktopFolderView(&spFolderView))) {
-        IShellFolder* sf = nullptr;
-        if (SUCCEEDED(spFolderView->GetFolder(IID_IShellFolder, (void**)&sf))) {
-            IEnumIDList* spEnum = nullptr;
-            if (SUCCEEDED(spFolderView->Items(SVGIO_ALLVIEW, IID_IEnumIDList, (void**)&spEnum))) {
-                PITEMID_CHILD pidl = nullptr;
-                ULONG fetched = 0;
-                while (spEnum->Next(1, &pidl, &fetched) == S_OK && fetched > 0) {
-                    if (pidl) {
-                        TimelineIcon icon = {};
-
-                        STRRET strret;
-                        wchar_t nameBuf[MAX_PATH] = L"";
-                        if (SUCCEEDED(sf->GetDisplayNameOf(pidl, SHGDN_NORMAL, &strret)))
-                            StrRetToBuf(&strret, pidl, nameBuf, MAX_PATH);
-
-                        icon.name = nameBuf;
-                        icon.path = L""; // v1: path not stored
-
-                        POINT pt = {0, 0};
-                        spFolderView->GetItemPosition(pidl, &pt);
-                        icon.x = pt.x;
-                        icon.y = pt.y;
-                        icon.gridRow = 0;
-                        icon.gridCol = 0;
-
-                        snap.icons.push_back(icon);
-                        CoTaskMemFree(pidl);
-                        pidl = nullptr;
-                    }
-                }
-                spEnum->Release();
-            }
-            sf->Release();
-        }
+    for (const auto& di : GetDesktopIcons()) {
+        TimelineIcon icon = {};
+        icon.name = di.name;
+        icon.path = di.path;
+        icon.x = di.x;
+        icon.y = di.y;
+        icon.gridRow = 0;
+        icon.gridCol = 0;
+        snap.icons.push_back(icon);
     }
 
     snap.iconCount = (int)snap.icons.size();
@@ -446,29 +383,13 @@ std::wstring TimelineEngine_ForceRecord() {
     g_lastKnownHash = ComputeLayoutHash();
     return snap.id;
 }
-
-DWORD TimelineEngine_GetLastHash() { return g_lastKnownHash; }
-
 void TimelineEngine_UpdateConfig(const TimelineConfig& cfg) { g_config = cfg; }
-
-const TimelineConfig& TimelineEngine_GetConfig() { return g_config; }
 
 void TimelineEngine_Shutdown() {
     g_initialized = false;
     g_saveFunc = nullptr;
     g_notifyFunc = nullptr;
 }
-
-const wchar_t* TimelineEngine_StateString() {
-    switch (g_state) {
-    case TimelineState::IDLE:        return L"IDLE";
-    case TimelineState::DEBOUNCING:  return L"DEBOUNCING";
-    case TimelineState::CONFIRMED:   return L"CONFIRMED";
-    default:                         return L"UNKNOWN";
-    }
-}
-
-int TimelineEngine_GetPendingChangeCount() { return g_pendingChangeCount; }
 
 void TimelineEngine_SetRules(const LayoutRules* rules) {
     g_pRules = rules;

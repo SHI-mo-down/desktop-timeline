@@ -9,19 +9,6 @@
 // Get desktop IFolderView via IServiceProvider::QueryService
 HRESULT GetDesktopFolderView(IFolderView** ppFolderView);
 
-// Save all icon positions to file
-HRESULT SaveIconPositions(const wchar_t* filePath);
-
-// Load icon positions from file
-struct SavedPosition { wchar_t name[MAX_PATH]; POINT point; };
-std::vector<SavedPosition> LoadIconPositions(const wchar_t* filePath);
-
-// Restore icon positions from file
-HRESULT RestoreIconPositions(const wchar_t* filePath);
-
-// Get current desktop icon count
-int GetDesktopIconCount();
-
 // Full icon info for state export / LLM bridge
 struct DesktopIcon {
     std::wstring name;
@@ -32,3 +19,6 @@ struct DesktopIcon {
 
 // Enumerate all desktop icons with name, path, and position
 std::vector<DesktopIcon> GetDesktopIcons();
+
+// Redraw the desktop view (call after moving icons or changing settings)
+void RefreshDesktopView();
