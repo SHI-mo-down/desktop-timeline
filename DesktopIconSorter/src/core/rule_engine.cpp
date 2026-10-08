@@ -3,101 +3,13 @@
 //           in-zone sorting, icon spacing, multi-monitor
 #include "rule_engine.h"
 #include "icon_manager.h"
+#include "../utils/json_extract.h"
 #include "../utils/com_ptr.h"
 #include <shlwapi.h>
 #include <stdio.h>
 #include <algorithm>
 #include <set>
 #include <map>
-
-// ═══════════════════════════════════════════
-//  JSON Parser (hand-rolled, zero dependencies)
-// ═══════════════════════════════════════════
-
-static std::wstring ReadFile(const wchar_t* path) {
-    std::wstring result;
-    FILE* fp = nullptr;
-    _wfopen_s(&fp, path, L"rb, ccs=UTF-8");
-    if (!fp) return result;
-    fseek(fp, 0, SEEK_END);
-    long size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    char* buf = new char[size + 1];
-    size_t read = fread(buf, 1, size, fp);
-    buf[read] = 0;
-    fclose(fp);
-    int wlen = MultiByteToWideChar(CP_UTF8, 0, buf, -1, nullptr, 0);
-    if (wlen > 0) {
-        wchar_t* wbuf = new wchar_t[wlen];
-        MultiByteToWideChar(CP_UTF8, 0, buf, -1, wbuf, wlen);
-        result = wbuf;
-        delete[] wbuf;
-    }
-    delete[] buf;
-    return result;
-}
-
-static std::wstring ExtractString(const std::wstring& s, const wchar_t* key) {
-    std::wstring search = std::wstring(L"\"") + key + L"\"";
-    size_t pos = s.find(search);
-    if (pos == std::wstring::npos) return L"";
-    pos = s.find(L'"', pos + search.length());
-    if (pos == std::wstring::npos) return L"";
-    pos++;
-    size_t end = s.find(L'"', pos);
-    if (end == std::wstring::npos) return L"";
-    return s.substr(pos, end - pos);
-}
-
-static int ExtractInt(const std::wstring& s, const wchar_t* key, int defaultVal = 0) {
-    std::wstring search = std::wstring(L"\"") + key + L"\"";
-    size_t pos = s.find(search);
-    if (pos == std::wstring::npos) return defaultVal;
-    pos = s.find(L':', pos);
-    if (pos == std::wstring::npos) return defaultVal;
-    pos++;
-    while (pos < s.length() && (s[pos] == L' ' || s[pos] == L'\t' || s[pos] == L'\n' || s[pos] == L'\r')) pos++;
-    return _wtoi(s.c_str() + pos);
-}
-
-static std::vector<std::wstring> ExtractStringArray(const std::wstring& s, const wchar_t* key) {
-    std::vector<std::wstring> result;
-    std::wstring search = std::wstring(L"\"") + key + L"\"";
-    size_t pos = s.find(search);
-    if (pos == std::wstring::npos) return result;
-    pos = s.find(L'[', pos);
-    if (pos == std::wstring::npos) return result;
-    size_t end = s.find(L']', pos);
-    if (end == std::wstring::npos) return result;
-    pos++;
-    while (pos < end) {
-        size_t q1 = s.find(L'"', pos);
-        if (q1 == std::wstring::npos || q1 >= end) break;
-        size_t q2 = s.find(L'"', q1 + 1);
-        if (q2 == std::wstring::npos || q2 >= end) break;
-        result.push_back(s.substr(q1 + 1, q2 - q1 - 1));
-        pos = q2 + 1;
-    }
-    return result;
-}
-
-static bool FindObjectBlock(const std::wstring& s, const wchar_t* label, size_t* outStart, size_t* outEnd) {
-    std::wstring search = std::wstring(L"\"") + label + L"\"";
-    size_t pos = s.find(search);
-    if (pos == std::wstring::npos) return false;
-    pos = s.find(L'[', pos);
-    if (pos == std::wstring::npos) return false;
-    *outStart = pos + 1;
-    int depth = 1;
-    size_t i = *outStart;
-    while (i < s.length() && depth > 0) {
-        if (s[i] == L'[') depth++;
-        else if (s[i] == L']') depth--;
-        if (depth > 0) i++;
-    }
-    *outEnd = i;
-    return depth == 0;
-}
 
 static RuleZone ParseZone(const std::wstring& block, int defaultW, int defaultH) {
     RuleZone zone = {};
@@ -110,14 +22,14 @@ static RuleZone ParseZone(const std::wstring& block, int defaultW, int defaultH)
     zone.usePercent = true;
     zone.matchMode = L"extension";
 
-    zone.name = ExtractString(block, L"name");
+    zone.name = Json_ExtractString(block, L"name");
 
-    int rawX = ExtractInt(block, L"x", 0);
-    int rawY = ExtractInt(block, L"y", 0);
-    int rawW = ExtractInt(block, L"w", 100);
-    int rawH = ExtractInt(block, L"h", 100);
+    int rawX = Json_ExtractInt(block, L"x", 0);
+    int rawY = Json_ExtractInt(block, L"y", 0);
+    int rawW = Json_ExtractInt(block, L"w", 100);
+    int rawH = Json_ExtractInt(block, L"h", 100);
 
-    std::wstring unit = ExtractString(block, L"unit");
+    std::wstring unit = Json_ExtractString(block, L"unit");
     if (unit == L"pixel") {
         zone.x = rawX; zone.y = rawY;
         zone.w = rawW; zone.h = rawH;
@@ -129,24 +41,24 @@ static RuleZone ParseZone(const std::wstring& block, int defaultW, int defaultH)
         zone.h = (int)((float)rawH / 100.0f * defaultH);
     }
 
-    zone.matchPatterns  = ExtractStringArray(block, L"match");
-    zone.excludePatterns = ExtractStringArray(block, L"exclude");
+    zone.matchPatterns  = Json_ExtractStringArray(block, L"match");
+    zone.excludePatterns = Json_ExtractStringArray(block, L"exclude");
 
-    std::wstring mm = ExtractString(block, L"match_mode");
+    std::wstring mm = Json_ExtractString(block, L"match_mode");
     if (!mm.empty()) zone.matchMode = mm;
 
-    std::wstring fm = ExtractString(block, L"fill");
+    std::wstring fm = Json_ExtractString(block, L"fill");
     if (!fm.empty()) zone.fillMode = fm;
 
-    std::wstring sb = ExtractString(block, L"sort");
+    std::wstring sb = Json_ExtractString(block, L"sort");
     if (!sb.empty()) zone.sortBy = sb;
 
-    std::wstring sd = ExtractString(block, L"sort_dir");
+    std::wstring sd = Json_ExtractString(block, L"sort_dir");
     if (!sd.empty()) zone.sortDir = sd;
 
-    zone.spacingX = ExtractInt(block, L"spacing_x", 0);
-    zone.spacingY = ExtractInt(block, L"spacing_y", 0);
-    zone.monitorIndex = ExtractInt(block, L"monitor", 0);
+    zone.spacingX = Json_ExtractInt(block, L"spacing_x", 0);
+    zone.spacingY = Json_ExtractInt(block, L"spacing_y", 0);
+    zone.monitorIndex = Json_ExtractInt(block, L"monitor", 0);
 
     return zone;
 }
@@ -494,16 +406,16 @@ LayoutRules RuleEngine_Load(const wchar_t* filePath, int screenW, int screenH) {
     LayoutRules rules = {};
     if (GetFileAttributesW(filePath) == INVALID_FILE_ATTRIBUTES) return rules;
 
-    std::wstring json = ReadFile(filePath);
+    std::wstring json = Json_ReadFileUtf8(filePath);
     if (json.empty()) return rules;
 
-    rules.name = ExtractString(json, L"name");
-    rules.onStartup = ExtractString(json, L"on_startup");
-    rules.onNewIcon = ExtractString(json, L"on_new_icon");
-    rules.defaultZone = ExtractString(json, L"default_zone");
+    rules.name = Json_ExtractString(json, L"name");
+    rules.onStartup = Json_ExtractString(json, L"on_startup");
+    rules.onNewIcon = Json_ExtractString(json, L"on_new_icon");
+    rules.defaultZone = Json_ExtractString(json, L"default_zone");
 
     size_t start, end;
-    if (FindObjectBlock(json, L"zones", &start, &end)) {
+    if (Json_FindArrayBlock(json, L"zones", &start, &end)) {
         size_t pos = start;
         while (pos < end) {
             size_t brace = json.find(L'{', pos);

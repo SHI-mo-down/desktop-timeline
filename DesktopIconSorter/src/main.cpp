@@ -21,6 +21,7 @@
 #include "core/desktop_state.h"
 #include "core/screenshot.h"
 #include "core/desktop_ops.h"
+#include "core/layout_engine.h"
 #include "utils/console.h"
 #include "ui/timeline_ui.h"
 #include "ui/resource.h"
@@ -316,6 +317,10 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
         Log("    spacing <h> <v> (pixels)");
         Log("    sysicon thispc|recycle|network|controlpanel|userfiles on|off");
         Log("  /shortcut <name> <target> [args] [workdir] [icon]  Create desktop shortcut");
+        Log("  /layout save <file>    Export current layout");
+        Log("  /layout apply <file>   Move icons per layout file (dump JSON format)");
+        Log("  /layout check <file>   Dry-run: report without moving");
+        Log("  /move <name> <col> <row>  Move one icon to grid position");
         Log("  /timeline      Open timeline panel");
         Log("  /checkpoint    Save a checkpoint");
         Log("  /list          List all snapshots");
@@ -431,6 +436,44 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
                 PrintWF(L"  Shortcut '%ls' created on desktop\n", argv[2]);
             else
                 Log("  Shortcut creation failed");
+        }
+    }
+    else if (_wcsicmp(argv[1], L"/layout") == 0 && argc >= 4) {
+        if (_wcsicmp(argv[2], L"save") == 0) {
+            GridSystem_Init();
+            int n = DesktopState_Export(argv[3]);
+            if (n >= 0) PrintWF(L"  Layout (%d icons) saved to %ls\n", n, argv[3]);
+            else Log("  Layout export failed");
+        }
+        else if (_wcsicmp(argv[2], L"apply") == 0 || _wcsicmp(argv[2], L"check") == 0) {
+            GridSystem_Init();
+            bool dry = _wcsicmp(argv[2], L"check") == 0;
+            LayoutApplyResult r = LayoutEngine_ApplyFile(argv[3], dry);
+            PrintWF(L"  %s: moved=%d missing=%zu failed=%zu untouched=%zu\n",
+                    dry ? L"check" : L"applied", r.moved, r.missing.size(),
+                    r.failed.size(), r.untouched.size());
+            for (const auto& m : r.missing)
+                PrintWF(L"    missing: %ls\n", m.c_str());
+            for (const auto& f : r.failed)
+                PrintWF(L"    failed: %ls\n", f.c_str());
+            for (const auto& u : r.untouched)
+                PrintWF(L"    untouched: %ls\n", u.c_str());
+            if (r.autoArrangeOn)
+                Log("    warning: auto_arrange is ON - positions may not stick");
+        }
+        else {
+            Log("Usage: /layout save <file> | /layout apply <file> | /layout check <file>");
+        }
+    }
+    else if (_wcsicmp(argv[1], L"/move") == 0) {
+        if (argc < 5) {
+            Log("Usage: /move <name> <col> <row>");
+        } else {
+            GridSystem_Init();
+            if (LayoutEngine_MoveIcon(argv[2], _wtoi(argv[3]), _wtoi(argv[4])))
+                PrintWF(L"  Moved '%ls' to (%d, %d)\n", argv[2], _wtoi(argv[3]), _wtoi(argv[4]));
+            else
+                PrintWF(L"  Icon '%ls' not found\n", argv[2]);
         }
     }
     else if (_wcsicmp(argv[1], L"/checkpoint") == 0) {
