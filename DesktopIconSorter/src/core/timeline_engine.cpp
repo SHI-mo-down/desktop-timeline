@@ -11,7 +11,6 @@
 #include <map>
 #include <utility>
 #include <vector>
-#include "rule_engine.h"
 #include "cleanup_policy.h"
 
 // Static state
@@ -20,7 +19,6 @@ static TimelineState g_state = TimelineState::IDLE;
 static TimelineAutoSaveFunc g_saveFunc = nullptr;
 static TimelineNotifyFunc g_notifyFunc = nullptr;
 static wchar_t g_baseDir[MAX_PATH] = {};
-static const LayoutRules* g_pRules = nullptr;
 static int g_cleanupCounter = 0;  // periodic cleanup every N polls
 
 static DWORD g_lastKnownHash = 0;
@@ -261,71 +259,6 @@ static void RecordSnapshot(const wchar_t* label) {
 
                 g_pendingChangeCount = changed;
 
-                // Auto-place new icons if rules are active
-                if (g_pRules && g_pRules->loaded && g_pRules->onNewIcon == L"place") {
-                    int cellW = 96, cellH = 49;
-                    int screenW = snap.monitorWidth;
-                    int screenH = snap.monitorHeight;
-
-                    // Build name→PIDL map in ONE COM enumeration (not per-icon)
-                    std::map<std::wstring, PITEMID_CHILD> pidlMap;
-                    ComPtr<IFolderView> spFV;
-                    if (SUCCEEDED(GetDesktopFolderView(&spFV))) {
-                        IShellFolder* sf2 = nullptr;
-                        IEnumIDList* spE2 = nullptr;
-                        if (SUCCEEDED(spFV->GetFolder(IID_IShellFolder, (void**)&sf2))) {
-                            if (SUCCEEDED(spFV->Items(SVGIO_ALLVIEW, IID_IEnumIDList, (void**)&spE2))) {
-                                PITEMID_CHILD pidl2 = nullptr;
-                                ULONG f2 = 0;
-                                while (spE2->Next(1, &pidl2, &f2) == S_OK && f2 > 0) {
-                                    if (pidl2) {
-                                        STRRET sr;
-                                        wchar_t n2[MAX_PATH] = L"";
-                                        if (SUCCEEDED(sf2->GetDisplayNameOf(pidl2, SHGDN_NORMAL, &sr)))
-                                            StrRetToBuf(&sr, pidl2, n2, MAX_PATH);
-                                        pidlMap[n2] = pidl2; // Store — will free later
-                                    }
-                                }
-                                spE2->Release();
-                            }
-                            sf2->Release();
-                        }
-                    }
-
-                    // Precompute zone assignments for all snap icons
-                    std::map<int, std::vector<POINT>> zoneOcc;
-                    for (const auto& si : snap.icons) {
-                        int zi = RuleEngine_MatchIconEx(*g_pRules, si.name, false);
-                        if (zi >= 0) zoneOcc[zi].push_back({si.x, si.y});
-                    }
-
-                    // Find NEW icons: in snap but NOT in prev
-                    std::set<std::wstring> oldNames;
-                    for (const auto& oi : prev.icons) oldNames.insert(oi.name);
-
-                    for (const auto& icon : snap.icons) {
-                        if (oldNames.count(icon.name)) continue; // Not new
-
-                        int zoneIdx = RuleEngine_MatchIconEx(*g_pRules, icon.name, false);
-                        if (zoneIdx < 0) continue;
-
-                        POINT target = {0, 0};
-                        if (RuleEngine_PlaceInZone(g_pRules->zones[zoneIdx],
-                                screenW, screenH, cellW, cellH, zoneOcc[zoneIdx], &target)) {
-                            auto it = pidlMap.find(icon.name);
-                            if (it != pidlMap.end() && it->second) {
-                                spFV->SelectAndPositionItems(
-                                    1, (PCUITEMID_CHILD*)&it->second, &target, SVSI_POSITIONITEM);
-                                zoneOcc[zoneIdx].push_back(target); // Mark as occupied
-                            }
-                        }
-                    }
-
-                    // Free all PIDLs from the map
-                    for (auto& pair : pidlMap) {
-                        if (pair.second) CoTaskMemFree(pair.second);
-                    }
-                }
             }
         }
     }
@@ -419,6 +352,3 @@ void TimelineEngine_Shutdown() {
     g_notifyFunc = nullptr;
 }
 
-void TimelineEngine_SetRules(const LayoutRules* rules) {
-    g_pRules = rules;
-}

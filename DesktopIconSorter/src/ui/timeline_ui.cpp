@@ -29,7 +29,6 @@ static void OnRestore();
 static void OnSaveCheckpoint();
 static void OnDeleteSelected();
 static void OnRenameSelected();
-static void OnSettings();
 static int  GetSelectedIndex();
 
 void TimelineUI_Show(HINSTANCE hInstance, HWND parentWnd, const wchar_t* baseDir) {
@@ -312,23 +311,6 @@ static void OnRenameSelected() {
     }
 }
 
-static void OnSettings() {
-    // Open the rules.dtrules file location for editing
-    wchar_t rulePath[MAX_PATH];
-    wsprintfW(rulePath, L"%s\\rules.dtrules", g_baseDir);
-
-    // If file exists, open it; otherwise show info
-    if (GetFileAttributesW(rulePath) != INVALID_FILE_ATTRIBUTES) {
-        ShellExecuteW(g_hwndTimeline, L"open", rulePath, nullptr, nullptr, SW_SHOW);
-    } else {
-        MessageBoxW(g_hwndTimeline,
-            L"No rules.dtrules found.\n\n"
-            L"Create this file in the program directory to define\n"
-            L"layout zones and auto-placement rules.",
-            L"Settings", MB_OK | MB_ICONINFORMATION);
-    }
-}
-
 static LRESULT CALLBACK TimelineWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE: {
@@ -397,11 +379,6 @@ static LRESULT CALLBACK TimelineWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             WS_CHILD | WS_VISIBLE | BS_FLAT,
             pad + btnW1 + btnW2 + 16, btnY, btnW3, btnH,
             hwnd, (HMENU)IDC_BTN_DELETE, g_hInst, nullptr);
-        // Settings — right-aligned, fills the empty space
-        CreateWindowExW(0, L"BUTTON", L"Settings",
-            WS_CHILD | WS_VISIBLE | BS_FLAT,
-            clientW - pad - btnW3, btnY, btnW3, btnH,
-            hwnd, (HMENU)IDC_BTN_SETTINGS, g_hInst, nullptr);
 
         // --- Status bar ---
         g_hwndStatus = CreateWindowExW(0, L"STATIC", L"",
@@ -441,7 +418,6 @@ static LRESULT CALLBACK TimelineWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         case IDC_BTN_RESTORE:    OnRestore(); break;
         case IDC_BTN_CHECKPOINT: OnSaveCheckpoint(); break;
         case IDC_BTN_DELETE:     OnDeleteSelected(); break;
-        case IDC_BTN_SETTINGS:   OnSettings(); break;
         }
         break;
 

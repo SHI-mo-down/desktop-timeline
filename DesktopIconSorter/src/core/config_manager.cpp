@@ -3,15 +3,6 @@
 #include <stdio.h>
 #include <string>
 
-static std::wstring EscapeJson(const std::wstring& s) {
-    std::wstring result;
-    for (wchar_t c : s) {
-        if (c == L'"' || c == L'\\') result += L'\\';
-        result += c;
-    }
-    return result;
-}
-
 AppConfig Config_Load(const wchar_t* filePath) {
     AppConfig config;
 
@@ -81,36 +72,6 @@ AppConfig Config_Load(const wchar_t* filePath) {
     }
 
     return config;
-}
-
-bool Config_Save(const wchar_t* filePath, const AppConfig& config) {
-    FILE* fp = nullptr;
-    _wfopen_s(&fp, filePath, L"w, ccs=UTF-8");
-    if (!fp) return false;
-
-    fwprintf(fp, L"{\n");
-    fwprintf(fp, L"  \"autoApply\": %s,\n", config.autoApply ? L"true" : L"false");
-    fwprintf(fp, L"  \"minimizeToTray\": %s,\n", config.minimizeToTray ? L"true" : L"false");
-    fwprintf(fp, L"  \"partitions\": [\n");
-
-    for (size_t i = 0; i < config.partitions.size(); i++) {
-        const auto& p = config.partitions[i];
-        fwprintf(fp, L"    {\n");
-        fwprintf(fp, L"      \"name\": \"%s\",\n", EscapeJson(p.name).c_str());
-        fwprintf(fp, L"      \"left\": %d,\n", p.left);
-        fwprintf(fp, L"      \"top\": %d,\n", p.top);
-        fwprintf(fp, L"      \"right\": %d,\n", p.right);
-        fwprintf(fp, L"      \"bottom\": %d,\n", p.bottom);
-        fwprintf(fp, L"      \"sortMode\": %d,\n", p.sortMode);
-        fwprintf(fp, L"      \"ascending\": %s,\n", p.ascending ? L"true" : L"false");
-        fwprintf(fp, L"      \"locked\": %s\n", p.locked ? L"true" : L"false");
-        fwprintf(fp, L"    }%s\n", (i < config.partitions.size() - 1) ? L"," : L"");
-    }
-
-    fwprintf(fp, L"  ]\n");
-    fwprintf(fp, L"}\n");
-    fclose(fp);
-    return true;
 }
 
 AppConfig Config_CreateDefault() {

@@ -50,7 +50,6 @@
     <ClCompile Include="src\core\config_manager.cpp" />
     <ClCompile Include="src\core\timeline_db.cpp" />
     <ClCompile Include="src\core\timeline_engine.cpp" />
-    <ClCompile Include="src\core\rule_engine.cpp" />
     <ClCompile Include="src\core\cleanup_policy.cpp" />
     <ClCompile Include="src\core\desktop_state.cpp" />
     <ClCompile Include="src\core\desktop_ops.cpp" />
@@ -66,7 +65,6 @@
     <ClInclude Include="src\core\timeline_record.h" />
     <ClInclude Include="src\core\timeline_db.h" />
     <ClInclude Include="src\core\timeline_engine.h" />
-    <ClInclude Include="src\core\rule_engine.h" />
     <ClInclude Include="src\core\cleanup_policy.h" />
     <ClInclude Include="src\core\desktop_state.h" />
     <ClInclude Include="src\core\desktop_ops.h" />

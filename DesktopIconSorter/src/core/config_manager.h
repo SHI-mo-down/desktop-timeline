@@ -15,7 +15,6 @@ struct AppConfig {
 AppConfig Config_Load(const wchar_t* filePath);
 
 // Save config to JSON file
-bool Config_Save(const wchar_t* filePath, const AppConfig& config);
 
 // Create default config with a single full-screen partition
 AppConfig Config_CreateDefault();

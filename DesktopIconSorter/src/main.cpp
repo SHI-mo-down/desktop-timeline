@@ -25,19 +25,16 @@
 #include "utils/console.h"
 #include "ui/timeline_ui.h"
 #include "ui/resource.h"
-#include "core/rule_engine.h"
 
 #pragma comment(lib, "comctl32.lib")
 
 // ── Globals ──
 wchar_t g_exeDir[MAX_PATH] = {};
 wchar_t g_configPath[MAX_PATH] = L"desktop_sorter_config.json";
-static AppConfig g_config;
 static TimelineConfig g_timelineCfg;
 static bool g_autoMonitor = true;
 static NOTIFYICONDATAW g_nid = {};
 static HINSTANCE g_hInstance = nullptr;
-static LayoutRules g_activeRules; // Persistent rules for engine access
 
 #define WM_TRAYICON         (WM_APP + 1)
 #define ID_TRAY_OPEN_TIMELINE 3001
@@ -211,30 +208,8 @@ int RunTrayMode(HINSTANCE hInstance) {
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
 
     GridSystem_Init();
-    g_config = Config_Load(g_configPath);
-    if (g_config.partitions.empty()) g_config = Config_CreateDefault();
     g_timelineCfg = TimelineConfig::Default();
     TimelineEngine_Init(g_exeDir, g_timelineCfg, TimelineSaveSnapshot, TimelineNotify);
-
-    // Load layout rules if present
-    int screenW = GetSystemMetrics(SM_CXSCREEN);
-    int screenH = GetSystemMetrics(SM_CYSCREEN);
-    SIZE cellSize = GridSystem_GetCellSize();
-
-    wchar_t rulePath[MAX_PATH];
-    wsprintfW(rulePath, L"%srules.dtrules", g_exeDir);
-    g_activeRules = RuleEngine_Load(rulePath, screenW, screenH);
-    TimelineEngine_SetRules(g_activeRules.loaded ? &g_activeRules : nullptr);
-
-    if (g_activeRules.loaded && g_activeRules.onStartup == L"apply") {
-        int moved = RuleEngine_Apply(g_activeRules, screenW, screenH, cellSize.cx, cellSize.cy,
-                                      nullptr, 0);
-        if (moved > 0) {
-            // Invalidate desktop to refresh
-            HWND hwndDT = FindWindowW(L"Progman", L"Program Manager");
-            if (hwndDT) { InvalidateRect(hwndDT, nullptr, TRUE); UpdateWindow(hwndDT); }
-        }
-    }
 
     const wchar_t* CLASS_NAME = L"DesktopTimeline_Tray";
     WNDCLASSW wc = {};

@@ -4,7 +4,6 @@
 #include <string>
 #include "timeline_record.h"
 
-struct LayoutRules; // forward declaration
 
 // Engine state
 enum class TimelineState {
@@ -93,6 +92,3 @@ void TimelineEngine_UpdateConfig(const TimelineConfig& cfg);
 void TimelineEngine_Shutdown();
 
 
-// Set active layout rules for automatic new-icon placement
-// Pass nullptr to disable auto-placement
-void TimelineEngine_SetRules(const LayoutRules* rules);

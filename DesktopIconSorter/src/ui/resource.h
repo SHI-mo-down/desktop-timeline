@@ -6,4 +6,3 @@
 #define IDC_BTN_RESTORE         1020
 #define IDC_BTN_CHECKPOINT      1023
 #define IDC_BTN_DELETE          1025
-#define IDC_BTN_SETTINGS        1026
