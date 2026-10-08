@@ -54,6 +54,7 @@
     <ClCompile Include="src\core\rule_engine.cpp" />
     <ClCompile Include="src\core\cleanup_policy.cpp" />
     <ClCompile Include="src\core\desktop_state.cpp" />
+    <ClCompile Include="src\core\desktop_ops.cpp" />
     <ClCompile Include="src\core\screenshot.cpp" />
     <ClCompile Include="src\ui\timeline_ui.cpp" />
     <ClCompile Include="src\main.cpp" />
@@ -68,6 +69,7 @@
     <ClInclude Include="src\core\rule_engine.h" />
     <ClInclude Include="src\core\cleanup_policy.h" />
     <ClInclude Include="src\core\desktop_state.h" />
+    <ClInclude Include="src\core\desktop_ops.h" />
     <ClInclude Include="src\core\screenshot.h" />
     <ClInclude Include="src\ui\timeline_ui.h" />
     <ClInclude Include="src\ui\resource.h" />

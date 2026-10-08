@@ -2,6 +2,7 @@
 #include "desktop_state.h"
 #include "icon_manager.h"
 #include "grid_system.h"
+#include "desktop_ops.h"
 #include "../utils/console.h"
 #include <stdio.h>
 #include <string>
@@ -69,6 +70,24 @@ int DesktopState_Export(const wchar_t* jsonPath) {
        + L", \"columns\": " + std::to_wstring(cell.cx > 0 ? screenW / cell.cx : 0)
        + L", \"rows\": " + std::to_wstring(cell.cy > 0 ? screenH / cell.cy : 0)
        + L" },\n";
+    int spacingH = 0, spacingV = 0;
+    Desktop_GetSpacing(&spacingH, &spacingV);
+    j += L"  \"settings\": { \"auto_arrange\": "
+       + std::wstring(Desktop_GetAutoArrange() ? L"true" : L"false")
+       + L", \"snap_to_grid\": "
+       + std::wstring(Desktop_GetSnapToGrid() ? L"true" : L"false")
+       + L", \"icon_size\": " + std::to_wstring(Desktop_GetIconSize())
+       + L", \"spacing_h\": " + std::to_wstring(spacingH)
+       + L", \"spacing_v\": " + std::to_wstring(spacingV)
+       + L", \"system_icons\": {";
+    auto sysIcons = Desktop_GetSystemIconStates();
+    for (size_t i = 0; i < sysIcons.size(); i++) {
+        j += L" \"" + JsonEscape(sysIcons[i].key) + L"\": "
+           + std::wstring(sysIcons[i].visible ? L"true" : L"false")
+           + (i + 1 < sysIcons.size() ? L"," : L"");
+    }
+    j += L" } },\n";
+
     j += L"  \"icons\": [\n";
 
     for (size_t i = 0; i < icons.size(); i++) {

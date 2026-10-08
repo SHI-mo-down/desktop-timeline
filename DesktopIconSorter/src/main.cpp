@@ -6,6 +6,7 @@
 #include <Windows.h>
 #include <ShellAPI.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <shlwapi.h>
 #include <CommCtrl.h>
 
@@ -19,6 +20,7 @@
 #include "core/timeline_engine.h"
 #include "core/desktop_state.h"
 #include "core/screenshot.h"
+#include "core/desktop_ops.h"
 #include "utils/console.h"
 #include "ui/timeline_ui.h"
 #include "ui/resource.h"
@@ -258,6 +260,32 @@ int RunTrayMode(HINSTANCE hInstance) {
 }
 
 // ── Console mode ──
+// on|off|1|0|true|false; returns false for anything else
+static bool ParseOnOff(const wchar_t* s, bool* out) {
+    if (_wcsicmp(s, L"on") == 0 || _wcsicmp(s, L"1") == 0 || _wcsicmp(s, L"true") == 0) { *out = true; return true; }
+    if (_wcsicmp(s, L"off") == 0 || _wcsicmp(s, L"0") == 0 || _wcsicmp(s, L"false") == 0) { *out = false; return true; }
+    return false;
+}
+
+static int ParseIconSize(const wchar_t* s) {
+    if (_wcsicmp(s, L"small") == 0) return 32;
+    if (_wcsicmp(s, L"medium") == 0) return 48;
+    if (_wcsicmp(s, L"large") == 0) return 96;
+    return _wtoi(s);
+}
+
+// Unicode-safe printf to stdout (see utils/console.h)
+static void PrintWF(const wchar_t* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    int len = _vscwprintf(fmt, ap);
+    if (len > 0) {
+        std::wstring buf(len, L'\0');
+        vswprintf_s(&buf[0], len + 1, fmt, ap);
+        Console_PrintW(buf);
+    }
+    va_end(ap);
+}
 int RunConsoleMode(int argc, wchar_t* argv[]) {
     InitPaths();
     // Take over a console only when run without one (e.g. double-click).
@@ -270,13 +298,21 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
         interactive = true;
     }
 
-    Log("Desktop Timeline — Layout Memory");
-    Log("==================================");
+    if (interactive) {
+        Log("Desktop Timeline — Layout Memory");
+        Log("==================================");
+    }
 
     if (argc < 2) {
         Log("Commands:");
         Log("  /dump          Export desktop state as JSON (desktop_state.json)");
         Log("  /shot          Screenshot desktop + state JSON (for LLM workflow)");
+        Log("  /set <what> <value>  Change desktop settings:");
+        Log("    autoarrange on|off      snapgrid on|off");
+        Log("    iconsize small|medium|large|<px>");
+        Log("    spacing <h> <v> (pixels)");
+        Log("    sysicon thispc|recycle|network|controlpanel|userfiles on|off");
+        Log("  /shortcut <name> <target> [args] [workdir] [icon]  Create desktop shortcut");
         Log("  /timeline      Open timeline panel");
         Log("  /checkpoint    Save a checkpoint");
         Log("  /list          List all snapshots");
@@ -305,12 +341,12 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
         wchar_t outPath[MAX_PATH];
         wsprintfW(outPath, L"%sdesktop_state.json", g_exeDir);
         int n = DesktopState_Export(outPath);
-        if (n >= 0) {
+        if (n < 0) {
+            Log("  Export failed - cannot read desktop icons");
+        } else if (interactive) {
             wchar_t msg[512];
             swprintf_s(msg, L"  Exported %d icons to %s\n", n, outPath);
             Console_PrintW(msg);
-        } else {
-            Log("  Export failed - cannot read desktop icons");
         }
     }
     else if (_wcsicmp(argv[1], L"/shot") == 0) {
@@ -320,24 +356,91 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
         wsprintfW(jsonPath, L"%sdesktop_state.json", g_exeDir);
         DesktopState_Export(jsonPath);
         if (Desktop_Screenshot(pngPath)) {
-            wchar_t msg[512];
-            swprintf_s(msg, L"  Screenshot saved to %s\n", pngPath);
-            Console_PrintW(msg);
+            if (interactive) {
+                wchar_t msg[512];
+                swprintf_s(msg, L"  Screenshot saved to %s\n", pngPath);
+                Console_PrintW(msg);
+            }
         } else {
             Log("  Screenshot failed");
+        }
+    }
+    else if (_wcsicmp(argv[1], L"/set") == 0) {
+        if (argc < 3) {
+            Log("Usage: /set autoarrange|snapgrid|iconsize|spacing|sysicon <value>");
+            Log("Run /dump to see current values.");
+        }
+        else if (_wcsicmp(argv[2], L"autoarrange") == 0) {
+            bool on = false;
+            if (argc >= 4 && ParseOnOff(argv[3], &on)) Desktop_SetAutoArrange(on);
+            Log(Desktop_GetAutoArrange() ? "  autoarrange: on" : "  autoarrange: off");
+        }
+        else if (_wcsicmp(argv[2], L"snapgrid") == 0) {
+            bool on = false;
+            if (argc >= 4 && ParseOnOff(argv[3], &on)) Desktop_SetSnapToGrid(on);
+            Log(Desktop_GetSnapToGrid() ? "  snapgrid: on" : "  snapgrid: off");
+        }
+        else if (_wcsicmp(argv[2], L"iconsize") == 0) {
+            if (argc >= 4) {
+                int px = ParseIconSize(argv[3]);
+                if (px > 0 && Desktop_SetIconSize(px)) Log("  iconsize set");
+                else Log("  iconsize failed (16-512 px)");
+            }
+            PrintWF(L"  iconsize: %d\n", Desktop_GetIconSize());
+        }
+        else if (_wcsicmp(argv[2], L"spacing") == 0) {
+            if (argc >= 5) {
+                int h = _wtoi(argv[3]), v = _wtoi(argv[4]);
+                if (h >= 16 && v >= 16 && Desktop_SetSpacing(h, v)) Log("  spacing set");
+                else Log("  spacing failed (min 16 px)");
+            }
+            int h = 0, v = 0;
+            Desktop_GetSpacing(&h, &v);
+            PrintWF(L"  spacing: %d x %d\n", h, v);
+        }
+        else if (_wcsicmp(argv[2], L"sysicon") == 0) {
+            if (argc < 4) {
+                Log("Usage: /set sysicon thispc|recycle|network|controlpanel|userfiles on|off");
+            } else if (argc >= 5) {
+                bool on = false;
+                if (ParseOnOff(argv[4], &on) && Desktop_SetSystemIcon(argv[3], on)) {
+                    PrintWF(L"  sysicon %ls: %ls\n", argv[3], on ? L"on" : L"off");
+                } else {
+                    Log("  sysicon failed (unknown key?)");
+                }
+            } else {
+                for (const auto& s : Desktop_GetSystemIconStates())
+                    PrintWF(L"  %ls: %ls\n", s.key.c_str(), s.visible ? L"visible" : L"hidden");
+            }
+        }
+        else {
+            Log("Unknown /set target");
+        }
+    }
+    else if (_wcsicmp(argv[1], L"/shortcut") == 0) {
+        if (argc < 4) {
+            Log("Usage: /shortcut <name> <target> [args] [workdir] [icon]");
+        } else {
+            const wchar_t* args = argc > 4 ? argv[4] : L"";
+            const wchar_t* workDir = argc > 5 ? argv[5] : L"";
+            const wchar_t* icon = argc > 6 ? argv[6] : L"";
+            if (Desktop_CreateShortcut(argv[2], argv[3], args, workDir, icon))
+                PrintWF(L"  Shortcut '%ls' created on desktop\n", argv[2]);
+            else
+                Log("  Shortcut creation failed");
         }
     }
     else if (_wcsicmp(argv[1], L"/checkpoint") == 0) {
         TimelineEngine_Init(g_exeDir, TimelineConfig::Default(), TimelineSaveSnapshot, nullptr);
         std::wstring id = TimelineEngine_ForceRecord();
-        wprintf(L"  Checkpoint: %s\n", id.c_str());
+        PrintWF(L"  Checkpoint: %s\n", id.c_str());
     }
     else if (_wcsicmp(argv[1], L"/list") == 0) {
         Timeline_Init(g_exeDir);
         auto list = Timeline_List(50);
-        wprintf(L"  %zu snapshots:\n", list.size());
+        PrintWF(L"  %zu snapshots:\n", list.size());
         for (size_t i = 0; i < list.size(); i++)
-            wprintf(L"  [%zu] %s  %s  %d icons\n",
+            PrintWF(L"  [%zu] %s  %s  %d icons\n",
                    i, list[i].timestamp.c_str(), list[i].name.c_str(), list[i].iconCount);
     }
     else if (wcsncmp(argv[1], L"/sort", 5) == 0) {
