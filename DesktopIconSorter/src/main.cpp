@@ -22,6 +22,7 @@
 #include "core/screenshot.h"
 #include "core/desktop_ops.h"
 #include "core/layout_engine.h"
+#include "core/mcp_server.h"
 #include "utils/console.h"
 #include "ui/timeline_ui.h"
 #include "ui/resource.h"
@@ -533,6 +534,8 @@ int RunSilentSort(int sortMode) {
 }
 
 int wmain(int argc, wchar_t* argv[]) {
+    if (argc >= 2 && _wcsicmp(argv[1], L"--mcp") == 0)
+        return Mcp_Run();
     if (argc >= 2 && _wcsicmp(argv[1], L"/tray") == 0)
         return RunTrayMode(GetModuleHandleW(nullptr));
     if (argc >= 2 && wcsncmp(argv[1], L"/sort:", 6) == 0)

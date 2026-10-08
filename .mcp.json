@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "desktop": {
+      "command": "C:\\Users\\35046\\Desktop\\workspace\\Desktop_Rules\\DesktopIconSorter\\x64\\Release\\DesktopIconSorter.exe",
+      "args": ["--mcp"]
+    }
+  }
+}

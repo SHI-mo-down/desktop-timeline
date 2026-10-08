@@ -8,6 +8,23 @@
 #include <vector>
 #include <stdio.h>
 
+inline std::wstring Json_Escape(const std::wstring& s) {
+    std::wstring out;
+    for (wchar_t c : s) {
+        switch (c) {
+        case L'"':  out += L"\\\""; break;
+        case L'\\': out += L"\\\\"; break;
+        case L'\n': out += L"\\n"; break;
+        case L'\r': out += L"\\r"; break;
+        case L'\t': out += L"\\t"; break;
+        default:
+            if (c < 0x20) { wchar_t buf[8]; wsprintfW(buf, L"\\u%04x", c); out += buf; }
+            else out += c;
+        }
+    }
+    return out;
+}
+
 inline std::wstring Json_ReadFileUtf8(const wchar_t* path) {
     std::wstring result;
     FILE* fp = nullptr;
@@ -50,7 +67,46 @@ inline int Json_ExtractInt(const std::wstring& s, const wchar_t* key, int defaul
     while (pos < s.length() && (s[pos] == L' ' || s[pos] == L'\t' ||
                                 s[pos] == L'\n' || s[pos] == L'\r'))
         pos++;
+    if (pos < s.length() && s[pos] == L'"') pos++; // "3" parses same as 3
     return _wtoi(s.c_str() + pos);
+}
+
+inline bool Json_ExtractBool(const std::wstring& s, const wchar_t* key, bool defaultVal = false) {
+    std::wstring search = std::wstring(L"\"") + key + L"\"";
+    size_t pos = s.find(search);
+    if (pos == std::wstring::npos) return defaultVal;
+    pos = s.find(L':', pos);
+    if (pos == std::wstring::npos) return defaultVal;
+    pos++;
+    while (pos < s.length() && iswspace(s[pos])) pos++;
+    if (pos < s.length() && s[pos] == L'"') pos++; // "true" parses same as true
+    if (pos >= s.length()) return defaultVal;
+    if (s[pos] == L't' || s[pos] == L'1') return true;
+    if (s[pos] == L'f' || s[pos] == L'0') return false;
+    return defaultVal;
+}
+
+// Raw token after "key": (number, quoted string, bool), verbatim — for
+// JSON-RPC id echo where both int and string ids must round-trip.
+inline std::wstring Json_ExtractRawValue(const std::wstring& s, const wchar_t* key) {
+    std::wstring search = std::wstring(L"\"") + key + L"\"";
+    size_t pos = s.find(search);
+    if (pos == std::wstring::npos) return L"";
+    pos = s.find(L':', pos);
+    if (pos == std::wstring::npos) return L"";
+    pos++;
+    while (pos < s.length() && (s[pos] == L' ' || s[pos] == L'\t')) pos++;
+    if (pos >= s.length()) return L"";
+    if (s[pos] == L'"') {
+        size_t end = s.find(L'"', pos + 1);
+        if (end == std::wstring::npos) return L"";
+        return s.substr(pos, end - pos + 1);
+    }
+    size_t start = pos;
+    while (pos < s.length() && s[pos] != L',' && s[pos] != L'}' &&
+           s[pos] != L' ' && s[pos] != L'\n' && s[pos] != L'\r')
+        pos++;
+    return s.substr(start, pos - start);
 }
 
 inline std::vector<std::wstring> Json_ExtractStringArray(const std::wstring& s, const wchar_t* key) {
@@ -88,6 +144,26 @@ inline bool Json_FindArrayBlock(const std::wstring& s, const wchar_t* label,
     while (i < s.length() && depth > 0) {
         if (s[i] == L'[') depth++;
         else if (s[i] == L']') depth--;
+        if (depth > 0) i++;
+    }
+    *outEnd = i;
+    return depth == 0;
+}
+
+// Find the { ... } block following "label": returns its inner range [start, end)
+inline bool Json_FindObjectBlock(const std::wstring& s, const wchar_t* label,
+                                 size_t* outStart, size_t* outEnd) {
+    std::wstring search = std::wstring(L"\"") + label + L"\"";
+    size_t pos = s.find(search);
+    if (pos == std::wstring::npos) return false;
+    pos = s.find(L'{', pos);
+    if (pos == std::wstring::npos) return false;
+    *outStart = pos + 1;
+    int depth = 1;
+    size_t i = *outStart;
+    while (i < s.length() && depth > 0) {
+        if (s[i] == L'{') depth++;
+        else if (s[i] == L'}') depth--;
         if (depth > 0) i++;
     }
     *outEnd = i;

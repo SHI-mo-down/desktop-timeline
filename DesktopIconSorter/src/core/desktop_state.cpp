@@ -4,26 +4,10 @@
 #include "grid_system.h"
 #include "desktop_ops.h"
 #include "../utils/console.h"
+#include "../utils/json_extract.h"
 #include <stdio.h>
 #include <string>
 #include <algorithm>
-
-static std::wstring JsonEscape(const std::wstring& s) {
-    std::wstring out;
-    for (wchar_t c : s) {
-        switch (c) {
-        case L'"':  out += L"\\\""; break;
-        case L'\\': out += L"\\\\"; break;
-        case L'\n': out += L"\\n"; break;
-        case L'\r': out += L"\\r"; break;
-        case L'\t': out += L"\\t"; break;
-        default:
-            if (c < 0x20) { wchar_t buf[8]; wsprintfW(buf, L"\\u%04x", c); out += buf; }
-            else out += c;
-        }
-    }
-    return out;
-}
 
 // UTF-8 without BOM (Python json.load / LLM tools parse it directly)
 static bool WriteUtf8File(const wchar_t* path, const std::wstring& content) {
@@ -42,9 +26,10 @@ static bool WriteUtf8File(const wchar_t* path, const std::wstring& content) {
     return written == utf8.size();
 }
 
-int DesktopState_Export(const wchar_t* jsonPath) {
+std::wstring DesktopState_BuildJson(int* outCount) {
     auto icons = GetDesktopIcons();
-    if (icons.empty()) return -1;
+    if (icons.empty()) return L"";
+    if (outCount) *outCount = (int)icons.size();
 
     std::sort(icons.begin(), icons.end(), [](const DesktopIcon& a, const DesktopIcon& b) {
         return _wcsicmp(a.name.c_str(), b.name.c_str()) < 0;
@@ -82,7 +67,7 @@ int DesktopState_Export(const wchar_t* jsonPath) {
        + L", \"system_icons\": {";
     auto sysIcons = Desktop_GetSystemIconStates();
     for (size_t i = 0; i < sysIcons.size(); i++) {
-        j += L" \"" + JsonEscape(sysIcons[i].key) + L"\": "
+        j += L" \"" + Json_Escape(sysIcons[i].key) + L"\": "
            + std::wstring(sysIcons[i].visible ? L"true" : L"false")
            + (i + 1 < sysIcons.size() ? L"," : L"");
     }
@@ -96,8 +81,8 @@ int DesktopState_Export(const wchar_t* jsonPath) {
         int row = 0, col = 0;
         GridSystem_PixelToGrid(pt, &row, &col);
 
-        j += L"    { \"name\": \"" + JsonEscape(ic.name)
-           + L"\", \"path\": \"" + JsonEscape(ic.path)
+        j += L"    { \"name\": \"" + Json_Escape(ic.name)
+           + L"\", \"path\": \"" + Json_Escape(ic.path)
            + L"\", \"x\": " + std::to_wstring(ic.x)
            + L", \"y\": " + std::to_wstring(ic.y)
            + L", \"col\": " + std::to_wstring(col)
@@ -107,9 +92,14 @@ int DesktopState_Export(const wchar_t* jsonPath) {
     }
 
     j += L"  ]\n}\n";
+    return j;
+}
 
+int DesktopState_Export(const wchar_t* jsonPath) {
+    int count = 0;
+    std::wstring j = DesktopState_BuildJson(&count);
+    if (j.empty()) return -1;
     Console_PrintW(j);
-
     if (!WriteUtf8File(jsonPath, j)) return -1;
-    return (int)icons.size();
+    return count;
 }

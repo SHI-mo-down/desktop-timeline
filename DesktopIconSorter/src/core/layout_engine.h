@@ -14,7 +14,10 @@ struct LayoutApplyResult {
     bool autoArrangeOn;               // warning: positions may not stick
 };
 
-// Apply a layout file. dryRun=true reports without moving anything.
+// Apply a layout. dryRun=true reports without moving anything.
+// ApplyJson takes the layout as text (must contain an "icons" array);
+// ApplyFile reads that text from a file (dump JSON format or minimal subset).
+LayoutApplyResult LayoutEngine_ApplyJson(const std::wstring& layoutJson, bool dryRun);
 LayoutApplyResult LayoutEngine_ApplyFile(const wchar_t* jsonPath, bool dryRun);
 
 // Move one icon by display name to grid position (col, row).

@@ -69,9 +69,8 @@ static POINT ClampToScreen(POINT pt) {
 }
 
 // Parse the icons array: name + (col,row | x,y)
-static std::vector<std::pair<std::wstring, POINT>> ParseLayout(const wchar_t* jsonPath) {
+static std::vector<std::pair<std::wstring, POINT>> ParseLayout(const std::wstring& text) {
     std::vector<std::pair<std::wstring, POINT>> out;
-    std::wstring text = Json_ReadFileUtf8(jsonPath);
     if (text.empty()) return out;
 
     size_t start, end;
@@ -83,32 +82,36 @@ static std::vector<std::pair<std::wstring, POINT>> ParseLayout(const wchar_t* js
         if (name.empty()) continue;
 
         POINT pt = {-1, -1};
+        bool hasPos = false; // pt.x can legitimately be negative (left monitor)
         // Exact pixels win when present (roundtrip fidelity); col/row is the
         // fallback for LLM-written grid layouts and cross-machine mapping
         int x = Json_ExtractInt(obj, L"x", -9999);
         int y = Json_ExtractInt(obj, L"y", -9999);
         if (x != -9999 && y != -9999) {
             pt = ClampToScreen({x, y});
+            hasPos = true;
         } else {
             int col = Json_ExtractInt(obj, L"col", -9999);
             int row = Json_ExtractInt(obj, L"row", -9999);
             if (col != -9999 || row != -9999) {
                 POINT gp;
-                if (GridSystem_GridToPixel(row < 0 ? 0 : row, col < 0 ? 0 : col, &gp))
+                if (GridSystem_GridToPixel(row < 0 ? 0 : row, col < 0 ? 0 : col, &gp)) {
                     pt = ClampToScreen(gp);
+                    hasPos = true;
+                }
             }
         }
-        if (pt.x < 0) continue; // no position info
+        if (!hasPos) continue;
         out.push_back({name, pt});
     }
     return out;
 }
 
-LayoutApplyResult LayoutEngine_ApplyFile(const wchar_t* jsonPath, bool dryRun) {
+LayoutApplyResult LayoutEngine_ApplyJson(const std::wstring& layoutJson, bool dryRun) {
     LayoutApplyResult result = {};
     result.autoArrangeOn = Desktop_GetAutoArrange();
 
-    auto targets = ParseLayout(jsonPath);
+    auto targets = ParseLayout(layoutJson);
     if (targets.empty()) return result;
 
     // Desktop icon names for untouched/missing reporting
@@ -157,6 +160,10 @@ LayoutApplyResult LayoutEngine_ApplyFile(const wchar_t* jsonPath, bool dryRun) {
     std::sort(result.untouched.begin(), result.untouched.end(),
               [](const auto& a, const auto& b) { return _wcsicmp(a.c_str(), b.c_str()) < 0; });
     return result;
+}
+
+LayoutApplyResult LayoutEngine_ApplyFile(const wchar_t* jsonPath, bool dryRun) {
+    return LayoutEngine_ApplyJson(Json_ReadFileUtf8(jsonPath), dryRun);
 }
 
 bool LayoutEngine_MoveIcon(const wchar_t* name, int col, int row) {
