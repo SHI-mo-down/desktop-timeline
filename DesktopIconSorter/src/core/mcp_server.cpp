@@ -115,6 +115,8 @@ static const wchar_t* kToolsJson = LR"TOOLS([
 {"name":"move_icon","description":"Move a single desktop icon to a grid cell (col,row). Grid origin and cell size are in the list_icons output.","inputSchema":{"type":"object","properties":{"name":{"type":"string","description":"Icon display name as shown by list_icons"},"col":{"type":"integer","minimum":0},"row":{"type":"integer","minimum":0}},"required":["name","col","row"]}},
 {"name":"apply_layout","description":"Move many icons at once. icons is an array of objects, each with name plus either col+row (grid cell) or x+y (exact pixels - preferred when copying a layout that has them). Returns a report: moved, missing (in layout but not on desktop), failed, untouched (on desktop but not in layout), auto_arrange_on (while true, positions will NOT stick - call set_autoarrange first). Use dry_run=true to preview without moving.","inputSchema":{"type":"object","properties":{"icons":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"col":{"type":"integer","minimum":0},"row":{"type":"integer","minimum":0},"x":{"type":"integer"},"y":{"type":"integer"}},"required":["name"]}},"dry_run":{"type":"boolean","description":"Report what would change without moving anything (default false)"}},"required":["icons"]}},
 {"name":"create_shortcut","description":"Create a shortcut (.lnk) on the desktop.","inputSchema":{"type":"object","properties":{"name":{"type":"string","description":"File name, .lnk may be omitted"},"target":{"type":"string","description":"Target executable, file, folder or URL"},"args":{"type":"string"},"workdir":{"type":"string"},"icon":{"type":"string","description":"Icon file path"}},"required":["name","target"]}},
+{"name":"rename_icon","description":"Rename a desktop item by display name. The file extension (.lnk, .txt...) is preserved automatically unless the new name already includes it. Windows system icons (This PC, Recycle Bin...) cannot be renamed.","inputSchema":{"type":"object","properties":{"name":{"type":"string","description":"Current display name"},"new_name":{"type":"string","description":"New display name, may omit the extension"}},"required":["name","new_name"]}},
+{"name":"delete_icon","description":"Delete a desktop item by display name. The item is moved to the recycle bin, so this is undoable. Windows system icons cannot be deleted.","inputSchema":{"type":"object","properties":{"name":{"type":"string","description":"Display name of the item to delete"}},"required":["name"]}},
 {"name":"set_autoarrange","description":"Turn Windows 'Auto arrange icons' on or off. While ON, positions set by apply_layout/move_icon will not stick; turn it off before arranging. Returns the value actually applied.","inputSchema":{"type":"object","properties":{"on":{"type":"boolean"}},"required":["on"]}},
 {"name":"set_snapgrid","description":"Turn 'Align icons to grid' on or off. Keep ON for tidy grid layouts; turn OFF to allow arbitrary pixel positions.","inputSchema":{"type":"object","properties":{"on":{"type":"boolean"}},"required":["on"]}},
 {"name":"set_iconsize","description":"Set desktop icon size in pixels (16-512) or \"small\"/\"medium\"/\"large\" (32/48/96). Omit size to just read the current value.","inputSchema":{"type":"object","properties":{"size":{"type":["integer","string"]}},"required":[]}},
@@ -251,6 +253,25 @@ static std::wstring HandleToolCall(const std::wstring& id, const std::wstring& r
                                          ico.empty() ? nullptr : ico.c_str());
         return ContentText(id, ok ? L"shortcut \"" + name + L"\" created"
                                   : L"shortcut creation failed", !ok);
+    }
+
+    if (tool == L"rename_icon") {
+        std::wstring name = Json_ExtractString(args, L"name");
+        std::wstring newName = Json_ExtractString(args, L"new_name");
+        if (name.empty() || newName.empty())
+            return ContentText(id, L"need name and new_name", true);
+        if (Desktop_RenameIcon(name.c_str(), newName.c_str()))
+            return ContentText(id, L"renamed \"" + name + L"\" to \"" + newName + L"\"");
+        return ContentText(id, L"rename failed: item not found, name invalid, already "
+                                L"exists, or system icon", true);
+    }
+
+    if (tool == L"delete_icon") {
+        std::wstring name = Json_ExtractString(args, L"name");
+        if (name.empty()) return ContentText(id, L"need name", true);
+        if (Desktop_DeleteIcon(name.c_str()))
+            return ContentText(id, L"deleted \"" + name + L"\" (moved to recycle bin)");
+        return ContentText(id, L"delete failed: item not found or system icon", true);
     }
 
     if (tool == L"set_autoarrange" || tool == L"set_snapgrid") {

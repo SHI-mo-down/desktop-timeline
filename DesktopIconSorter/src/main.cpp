@@ -439,6 +439,22 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
                 Log("  Shortcut creation failed");
         }
     }
+    else if (_wcsicmp(argv[1], L"/rename") == 0) {
+        if (argc < 4) {
+            Log("Usage: /rename <name> <new_name>");
+        } else if (Desktop_RenameIcon(argv[2], argv[3]))
+            PrintWF(L"  Renamed '%ls' to '%ls'\n", argv[2], argv[3]);
+        else
+            Log("  Rename failed (not found / invalid name / already exists / system icon)");
+    }
+    else if (_wcsicmp(argv[1], L"/delete") == 0) {
+        if (argc < 3) {
+            Log("Usage: /delete <name>  (moves the item to the recycle bin)");
+        } else if (Desktop_DeleteIcon(argv[2]))
+            PrintWF(L"  Deleted '%ls' (moved to recycle bin)\n", argv[2]);
+        else
+            Log("  Delete failed (not found / system icon)");
+    }
     else if (_wcsicmp(argv[1], L"/layout") == 0 && argc >= 4) {
         if (_wcsicmp(argv[2], L"save") == 0) {
             GridSystem_Init();

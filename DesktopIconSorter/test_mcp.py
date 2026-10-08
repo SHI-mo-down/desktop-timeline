@@ -1,7 +1,7 @@
 """MCP roundtrip test for DesktopIconSorter --mcp. Restores desktop afterwards.
 Run from anywhere: exe resolved to x64/Release/DesktopIconSorter.exe.
 Moves one real icon and restores it via snapshot; requires the built exe."""
-import base64, json, os, subprocess, sys
+import base64, json, os, subprocess, sys, time
 
 EXE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                    "x64", "Release", "DesktopIconSorter.exe")
@@ -93,6 +93,24 @@ check("quoted scalars parse (str col/row, str dry_run)", rep["moved"] == 1, text
 r = call(32, "list_icons")
 still = {i["name"]: (i["x"], i["y"]) for i in json.loads(text_of(r))["icons"]}
 check("quoted dry_run did not move", still == orig)
+
+# 6c. create/rename/delete roundtrip on a throwaway item (net zero change)
+# sleeps cover the shell's async view refresh after each filesystem op
+r = call(40, "create_shortcut", {"name": "mcp-item-test", "target": "notepad.exe"})
+check("create_shortcut", "created" in text_of(r), text_of(r))
+time.sleep(1.5)
+r = call(41, "rename_icon", {"name": "mcp-item-test", "new_name": "mcp-item-renamed"})
+check("rename_icon", "renamed" in text_of(r), text_of(r))
+time.sleep(1.5)
+r = call(42, "delete_icon", {"name": "mcp-item-renamed"})
+check("delete_icon", "recycle bin" in text_of(r), text_of(r))
+time.sleep(1.5)
+r = call(43, "list_icons")
+names = [i["name"] for i in json.loads(text_of(r))["icons"]]
+check("test item gone, set unchanged", "mcp-item-renamed" not in names
+      and "mcp-item-test" not in names and set(names) == set(orig))
+r = call(44, "rename_icon", {"name": "no such item zzz", "new_name": "x"})
+check("rename missing -> isError", r["result"].get("isError") is True, text_of(r))
 
 # 7. screenshot -> image block with PNG magic
 r = call(19, "screenshot")

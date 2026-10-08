@@ -1,5 +1,6 @@
 // desktop_ops.h : Desktop settings operations for the LLM bridge
-// Auto-arrange, snap-to-grid, icon size, spacing, system icons, shortcuts.
+// Auto-arrange, snap-to-grid, icon size, spacing, system icons, shortcuts,
+// rename/delete of individual items.
 #pragma once
 #include <Windows.h>
 #include <string>
@@ -26,3 +27,11 @@ bool Desktop_SetSystemIcon(const wchar_t* key, bool visible);  // thispc|recycle
 bool Desktop_CreateShortcut(const wchar_t* name, const wchar_t* target,
                             const wchar_t* args, const wchar_t* workDir,
                             const wchar_t* iconPath);
+
+// ── Item ops ──
+// Rename a desktop item by display name. File extension is preserved
+// (.lnk etc.) unless already typed. System icons (::{CLSID}) are refused.
+bool Desktop_RenameIcon(const wchar_t* name, const wchar_t* newName);
+// Delete a desktop item by display name: moves it to the recycle bin
+// (undoable). System icons are refused.
+bool Desktop_DeleteIcon(const wchar_t* name);

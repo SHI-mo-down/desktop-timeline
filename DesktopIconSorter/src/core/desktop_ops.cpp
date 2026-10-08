@@ -3,6 +3,7 @@
 #include "icon_manager.h"
 #include <shlobj.h>
 #include <shobjidl.h>
+#include <shellapi.h>
 #include "../utils/com_ptr.h"
 
 #pragma comment(lib, "shell32.lib")
@@ -198,4 +199,64 @@ bool Desktop_CreateShortcut(const wchar_t* name, const wchar_t* target,
     if (SUCCEEDED(hr))
         SHChangeNotify(SHCNE_CREATE, SHCNF_PATHW, lnkPath.c_str(), nullptr);
     return SUCCEEDED(hr);
+}
+
+// ── Item ops (rename / delete by display name) ──
+
+static const DesktopIcon* FindIconByName(const std::vector<DesktopIcon>& v,
+                                         const wchar_t* name) {
+    for (const auto& d : v)
+        if (_wcsicmp(d.name.c_str(), name) == 0) return &d;
+    return nullptr;
+}
+
+bool Desktop_RenameIcon(const wchar_t* name, const wchar_t* newName) {
+    if (!name || !*name || !newName || !*newName) return false;
+    if (wcspbrk(newName, L"\\/:*?\"<>|") || wcslen(newName) > 200) return false;
+
+    auto icons = GetDesktopIcons();
+    const DesktopIcon* ic = FindIconByName(icons, name);
+    if (!ic || ic->path.rfind(L"::", 0) == 0) return false; // system icon
+
+    std::wstring oldPath = ic->path;
+    size_t slash = oldPath.find_last_of(L'\\');
+    if (slash == std::wstring::npos) return false;
+
+    // keep the original extension unless the caller already typed it;
+    // for folders there is none, and a leading dot (.gitignore) is not one
+    std::wstring base = newName;
+    if (!ic->isFolder) {
+        size_t dot = oldPath.find_last_of(L'.');
+        if (dot != std::wstring::npos && dot > slash + 1) {
+            std::wstring ext = oldPath.substr(dot);
+            bool hasExt = base.size() > ext.size() &&
+                _wcsicmp(base.c_str() + base.size() - ext.size(), ext.c_str()) == 0;
+            if (!hasExt) base += ext;
+        }
+    }
+    std::wstring newPath = oldPath.substr(0, slash + 1) + base;
+
+    if (!MoveFileW(oldPath.c_str(), newPath.c_str())) return false;
+    SHChangeNotify(SHCNE_RENAMEITEM, SHCNF_PATHW, oldPath.c_str(), newPath.c_str());
+    RefreshDesktopView();
+    return true;
+}
+
+bool Desktop_DeleteIcon(const wchar_t* name) {
+    if (!name || !*name) return false;
+
+    auto icons = GetDesktopIcons();
+    const DesktopIcon* ic = FindIconByName(icons, name);
+    if (!ic || ic->path.rfind(L"::", 0) == 0) return false; // system icon
+
+    std::wstring from = ic->path;
+    from.push_back(L'\0'); // SHFileOperation wants a double-null list
+
+    SHFILEOPSTRUCTW op = {};
+    op.wFunc = FO_DELETE;
+    op.pFrom = from.c_str();
+    op.fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI;
+    int r = SHFileOperationW(&op);
+    RefreshDesktopView();
+    return r == 0 && !op.fAnyOperationsAborted;
 }
