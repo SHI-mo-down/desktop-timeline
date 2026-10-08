@@ -4,6 +4,7 @@
 #pragma once
 #include <Windows.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 struct LayoutApplyResult {
@@ -23,3 +24,8 @@ LayoutApplyResult LayoutEngine_ApplyFile(const wchar_t* jsonPath, bool dryRun);
 // Move one icon by display name to grid position (col, row).
 // Returns false if the icon was not found.
 bool LayoutEngine_MoveIcon(const wchar_t* name, int col, int row);
+
+// Move icons to exact pixels by display name (case-insensitive), the loop
+// shared by snapshot restores. No clamping: stored positions are restored
+// as-is. Returns icons moved, -1 if COM setup failed.
+int LayoutEngine_ApplyPairs(const std::vector<std::pair<std::wstring, POINT>>& targets);

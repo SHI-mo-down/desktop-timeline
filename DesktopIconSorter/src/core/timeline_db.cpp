@@ -23,17 +23,20 @@ bool Timeline_Init(const wchar_t* baseDir) {
 }
 
 // Format: 20260629_153000_auto or checkpoint_工作布局
+void Timeline_MakeCheckpointId(const wchar_t* name, wchar_t* out, size_t outSize) {
+    wchar_t safe[128];
+    wcsncpy_s(safe, name ? name : L"", 127);
+    for (wchar_t* p = safe; *p; p++) {
+        if (*p == L'\\' || *p == L'/' || *p == L':' || *p == L'*' ||
+            *p == L'?' || *p == L'"' || *p == L'<' || *p == L'>' || *p == L'|')
+            *p = L'_';
+    }
+    wsprintfW(out, L"checkpoint_%s", safe);
+}
+
 static void MakeSnapshotId(const TimelineSnapshot& snap, wchar_t* out, size_t outSize) {
     if (snap.isCheckpoint) {
-        // Sanitize name for filesystem
-        wchar_t safe[128];
-        wcsncpy_s(safe, snap.name.c_str(), 127);
-        for (wchar_t* p = safe; *p; p++) {
-            if (*p == L'\\' || *p == L'/' || *p == L':' || *p == L'*' ||
-                *p == L'?' || *p == L'"' || *p == L'<' || *p == L'>' || *p == L'|')
-                *p = L'_';
-        }
-        wsprintfW(out, L"checkpoint_%s", safe);
+        Timeline_MakeCheckpointId(snap.name.c_str(), out, outSize);
     } else {
         wsprintfW(out, L"%s", snap.id.c_str());
     }
@@ -47,18 +50,6 @@ static void GetFilePath(const wchar_t* id, bool isCheckpoint, wchar_t* out, size
         wsprintfW(out, L"%s\\%s.dslayout", g_timelineDir, id);
 }
 
-bool Timeline_GetFilePath(const wchar_t* id, wchar_t* outPath, size_t outSize) {
-    if (!g_initialized) return false;
-    // Try both directories
-    wsprintfW(outPath, L"%s\\%s.dslayout", g_timelineDir, id);
-    if (GetFileAttributesW(outPath) != INVALID_FILE_ATTRIBUTES) return true;
-
-    wsprintfW(outPath, L"%s\\%s.dslayout", g_checkpointsDir, id);
-    if (GetFileAttributesW(outPath) != INVALID_FILE_ATTRIBUTES) return true;
-
-    return false;
-}
-
 // Write a snapshot to .dslayout file
 bool Timeline_Save(const TimelineSnapshot& snapshot) {
     if (!g_initialized) return false;
@@ -69,14 +60,11 @@ bool Timeline_Save(const TimelineSnapshot& snapshot) {
     wchar_t filePath[MAX_PATH];
     GetFilePath(fileName, snapshot.isCheckpoint, filePath, MAX_PATH);
 
-    FILE* fp = nullptr;
-    _wfopen_s(&fp, filePath, L"w, ccs=UTF-8");
-    if (!fp) return false;
-
     // Write to temp file first, then rename for atomicity
     wchar_t tmpPath[MAX_PATH];
     wsprintfW(tmpPath, L"%s.tmp", filePath);
 
+    FILE* fp = nullptr;
     _wfopen_s(&fp, tmpPath, L"w, ccs=UTF-8");
     if (!fp) return false;
 
@@ -173,24 +161,9 @@ bool Timeline_Load(const wchar_t* id, TimelineSnapshot* out) {
                 out->isCheckpoint = (wcscmp(line + 12, L"true") == 0);
             else if (wcsncmp(line, L"Monitors: ", 10) == 0)
                 out->monitorCount = _wtoi(line + 10);
-            else if (wcsncmp(line, L"Monitor: ", 9) == 0) {
-                // Each Monitor: line fills one slot up to monitorCount
-                static int monIdx = 0;
-                if (monIdx < 8 && monIdx < out->monitorCount) {
-                    wchar_t* ctx = nullptr;
-                    wchar_t* l = wcstok(line + 9, L",", &ctx);
-                    wchar_t* t = wcstok(nullptr, L",", &ctx);
-                    wchar_t* r = wcstok(nullptr, L",", &ctx);
-                    wchar_t* b = wcstok(nullptr, L",", &ctx);
-                    if (l && t && r && b) {
-                        out->monitors[monIdx].left   = _wtoi(l);
-                        out->monitors[monIdx].top    = _wtoi(t);
-                        out->monitors[monIdx].right  = _wtoi(r);
-                        out->monitors[monIdx].bottom = _wtoi(b);
-                    }
-                    monIdx++;
-                }
-            }
+            // ponytail: per-monitor rect lines share the "Monitor: " prefix
+            // with the primary line above and are absorbed by it; no reader
+            // uses the rects, revisit if multi-monitor restore ever needs them
         } else {
             // Parse icon: Name|X|Y|GridRow|GridCol
             wchar_t* ctx = nullptr;
@@ -315,43 +288,9 @@ bool Timeline_Delete(const wchar_t* id) {
     return DeleteFileW(filePath) != 0;
 }
 
-int Timeline_Count() {
-    if (!g_initialized) return 0;
-
-    // Fast file count via FindFirstFile/FindNextFile — no file opens needed
-    int count = 0;
-    WIN32_FIND_DATAW fd;
-    HANDLE hFind;
-
-    wchar_t searchPath[MAX_PATH];
-    wsprintfW(searchPath, L"%s\\*.dslayout", g_timelineDir);
-    hFind = FindFirstFileW(searchPath, &fd);
-    if (hFind != INVALID_HANDLE_VALUE) {
-        do { if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) count++; }
-        while (FindNextFileW(hFind, &fd));
-        FindClose(hFind);
-    }
-
-    wsprintfW(searchPath, L"%s\\*.dslayout", g_checkpointsDir);
-    hFind = FindFirstFileW(searchPath, &fd);
-    if (hFind != INVALID_HANDLE_VALUE) {
-        do { if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) count++; }
-        while (FindNextFileW(hFind, &fd));
-        FindClose(hFind);
-    }
-
-    return count;
-}
-
 bool Timeline_GetLatest(TimelineSummary* out) {
     auto list = Timeline_List(1);
     if (list.empty()) return false;
     if (out) *out = list[0];
     return true;
-}
-
-std::vector<TimelineIcon> Timeline_LoadIconsOnly(const wchar_t* id) {
-    TimelineSnapshot snap;
-    if (!Timeline_Load(id, &snap)) return {};
-    return snap.icons;
 }

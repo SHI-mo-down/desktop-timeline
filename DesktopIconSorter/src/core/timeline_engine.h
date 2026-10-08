@@ -77,6 +77,15 @@ TimelineState TimelineEngine_Poll();
 // Returns the snapshot ID
 std::wstring TimelineEngine_ForceRecord();
 
+// Save the current layout as a named checkpoint (no engine init needed,
+// Timeline_Init must have run). Returns the checkpoint ID for later
+// TimelineEngine_Restore, or empty on failure.
+std::wstring TimelineEngine_SaveCheckpoint(const wchar_t* name);
+
+// Restore desktop icon positions from a stored snapshot ID.
+// Returns icons restored, -1 on failure.
+int TimelineEngine_Restore(const wchar_t* snapshotId);
+
 
 void TimelineEngine_UpdateConfig(const TimelineConfig& cfg);
 

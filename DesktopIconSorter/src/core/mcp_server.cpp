@@ -7,7 +7,8 @@
 #include "layout_engine.h"
 #include "screenshot.h"
 #include "grid_system.h"
-#include "snapshot_manager.h"
+#include "timeline_db.h"
+#include "timeline_engine.h"
 #include "../utils/console.h"
 #include "../utils/json_extract.h"
 #include <io.h>
@@ -339,9 +340,9 @@ static std::wstring HandleToolCall(const std::wstring& id, const std::wstring& r
         if (!ValidSnapshotName(name))
             return ContentText(id, L"invalid snapshot name (1-100 chars, "
                                     L"no \\ / : * ? \" < > |)", true);
-        if (!Snapshot_Save(name.c_str()))
-            return ContentText(id, L"snapshot save failed", true);
-        return ContentText(id, L"snapshot \"" + name + L"\" saved");
+        std::wstring sid = TimelineEngine_SaveCheckpoint(name.c_str());
+        if (sid.empty()) return ContentText(id, L"snapshot save failed", true);
+        return ContentText(id, L"snapshot \"" + name + L"\" saved (" + sid + L")");
     }
 
     if (tool == L"restore_snapshot") {
@@ -349,13 +350,13 @@ static std::wstring HandleToolCall(const std::wstring& id, const std::wstring& r
         if (!ValidSnapshotName(name))
             return ContentText(id, L"invalid snapshot name (1-100 chars, "
                                     L"no \\ / : * ? \" < > |)", true);
-        wchar_t fp[MAX_PATH];
-        if (FAILED(StringCchPrintfW(fp, MAX_PATH, L"%s\\snapshots\\manual\\%s.snap",
-                                    g_exeDir, name.c_str())))
-            return ContentText(id, L"snapshot path too long", true);
-        if (!Snapshot_Restore(fp))
+        wchar_t sid[160];
+        Timeline_MakeCheckpointId(name.c_str(), sid, 160);
+        int n = TimelineEngine_Restore(sid);
+        if (n < 0)
             return ContentText(id, L"snapshot not found or restore failed: " + name, true);
-        return ContentText(id, L"snapshot \"" + name + L"\" restored");
+        return ContentText(id, L"snapshot \"" + name + L"\" restored (" +
+                                std::to_wstring(n) + L" icons)");
     }
 
     return RespErr(id, -32602, L"unknown tool: " + tool);

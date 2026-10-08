@@ -3,8 +3,8 @@
 #include "resource.h"
 #include "../core/timeline_db.h"
 #include "../core/timeline_record.h"
+#include "../core/timeline_engine.h"
 #include "../core/icon_manager.h"
-#include "../core/snapshot_manager.h"
 #include <CommCtrl.h>
 #include <uxtheme.h>
 #include <stdio.h>
@@ -171,55 +171,22 @@ static void OnRestore() {
              snap.iconCount, snap.name.c_str());
     if (MessageBoxW(g_hwndTimeline, msg, L"Confirm Restore", MB_YESNO | MB_ICONQUESTION) != IDYES) return;
 
-    // Save current layout before restoring (undo support)
+    // Safety net: record the pre-restore state so the restore is undoable
     {
-        TimelineSnapshot cur;
-        ComPtr<IFolderView> spFV2;
-        if (SUCCEEDED(GetDesktopFolderView(&spFV2))) {
-            // Quick save via snapshot manager
-            Snapshot_AutoSave();
-        }
+        SYSTEMTIME st; GetLocalTime(&st);
+        wchar_t name[64];
+        wsprintfW(name, L"%02d%02d_%02d%02d", st.wMonth, st.wDay, st.wHour, st.wMinute);
+        TimelineEngine_SaveCheckpoint(name);
     }
 
-    int restored = 0;
-    ComPtr<IFolderView> spFolderView;
-    IShellFolder* sf = nullptr;
-    IEnumIDList* spEnum = nullptr;
-
-    if (FAILED(GetDesktopFolderView(&spFolderView))) goto done;
-    if (FAILED(spFolderView->GetFolder(IID_IShellFolder, (void**)&sf))) goto done;
-    if (FAILED(spFolderView->Items(SVGIO_ALLVIEW, IID_IEnumIDList, (void**)&spEnum))) {
-        sf->Release(); goto done;
+    int restored = TimelineEngine_Restore(id);
+    if (restored < 0) {
+        MessageBoxW(g_hwndTimeline, L"Could not access desktop icons.", L"Error", MB_OK);
+        return;
     }
-
-    {
-        PITEMID_CHILD pidl = nullptr; ULONG fetched = 0;
-        while (spEnum->Next(1, &pidl, &fetched) == S_OK && fetched > 0) {
-            if (pidl) {
-                STRRET strret; wchar_t name[MAX_PATH] = L"";
-                if (SUCCEEDED(sf->GetDisplayNameOf(pidl, SHGDN_NORMAL, &strret)))
-                    StrRetToBuf(&strret, pidl, name, MAX_PATH);
-                for (const auto& icon : snap.icons) {
-                    if (wcscmp(name, icon.name.c_str()) == 0) {
-                        POINT pt = { icon.x, icon.y };
-                        if (SUCCEEDED(spFolderView->SelectAndPositionItems(
-                                1, (PCUITEMID_CHILD*)&pidl, &pt, SVSI_POSITIONITEM)))
-                            restored++;
-                        break;
-                    }
-                }
-                CoTaskMemFree(pidl); pidl = nullptr;
-            }
-        }
-    }
-    spEnum->Release(); sf->Release();
 
     wsprintfW(msg, L"Restored %d of %d icons.", restored, snap.iconCount);
     MessageBoxW(g_hwndTimeline, msg, L"Done", MB_OK);
-    return;
-
-done:
-    MessageBoxW(g_hwndTimeline, L"Could not access desktop icons.", L"Error", MB_OK);
 }
 
 static void OnSaveCheckpoint() {
@@ -228,50 +195,12 @@ static void OnSaveCheckpoint() {
         L"Save Checkpoint", MB_YESNO | MB_ICONQUESTION) != IDYES) return;
 
     SYSTEMTIME st; GetLocalTime(&st);
-    wchar_t displayName[64], safeName[64];
+    wchar_t displayName[64];
     wsprintfW(displayName, L"Checkpoint %02d-%02d %02d:%02d",
              st.wMonth, st.wDay, st.wHour, st.wMinute);
-    wsprintfW(safeName, L"checkpoint_%02d%02d_%02d%02d",
-             st.wMonth, st.wDay, st.wHour, st.wMinute);
 
-    TimelineSnapshot snap = {};
-    snap.id = safeName;
-    snap.name = displayName;
-    snap.isCheckpoint = true;
-    snap.monitorWidth = GetSystemMetrics(SM_CXSCREEN);
-    snap.monitorHeight = GetSystemMetrics(SM_CYSCREEN);
-    HDC hdc = GetDC(nullptr); snap.dpi = GetDeviceCaps(hdc, LOGPIXELSX); ReleaseDC(nullptr, hdc);
-
-    bool comOk = false;
-    ComPtr<IFolderView> spFolderView;
-    if (SUCCEEDED(GetDesktopFolderView(&spFolderView))) {
-        IShellFolder* sf = nullptr;
-        if (SUCCEEDED(spFolderView->GetFolder(IID_IShellFolder, (void**)&sf))) {
-            IEnumIDList* spEnum = nullptr;
-            if (SUCCEEDED(spFolderView->Items(SVGIO_ALLVIEW, IID_IEnumIDList, (void**)&spEnum))) {
-                comOk = true;
-                PITEMID_CHILD pidl = nullptr; ULONG fetched = 0;
-                while (spEnum->Next(1, &pidl, &fetched) == S_OK && fetched > 0) {
-                    if (pidl) {
-                        TimelineIcon icon = {};
-                        STRRET strret; wchar_t nameBuf[MAX_PATH] = L"";
-                        if (SUCCEEDED(sf->GetDisplayNameOf(pidl, SHGDN_NORMAL, &strret)))
-                            StrRetToBuf(&strret, pidl, nameBuf, MAX_PATH);
-                        icon.name = nameBuf;
-                        POINT pt = {0, 0};
-                        spFolderView->GetItemPosition(pidl, &pt);
-                        icon.x = pt.x; icon.y = pt.y;
-                        snap.icons.push_back(icon);
-                        CoTaskMemFree(pidl);
-                    }
-                }
-                spEnum->Release();
-            }
-            sf->Release();
-        }
-    }
-
-    if (!comOk || snap.icons.empty()) {
+    std::wstring id = TimelineEngine_SaveCheckpoint(displayName);
+    if (id.empty()) {
         MessageBoxW(g_hwndTimeline,
             L"Could not read desktop icons.\n\n"
             L"Make sure the desktop is visible (not on lock screen)\n"
@@ -280,21 +209,8 @@ static void OnSaveCheckpoint() {
         return;
     }
 
-    snap.iconCount = (int)snap.icons.size();
-
-    wchar_t ts[64];
-    wsprintfW(ts, L"%04d-%02d-%02dT%02d:%02d:%02d",
-             st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
-    snap.timestamp = ts;
-
-    if (Timeline_Save(snap)) {
-        wchar_t done[128];
-        wsprintfW(done, L"Checkpoint saved: %d icons.", snap.iconCount);
-        MessageBoxW(g_hwndTimeline, done, L"Done", MB_OK);
-        PopulateList();
-    } else {
-        MessageBoxW(g_hwndTimeline, L"Failed to write checkpoint file.", L"Error", MB_OK);
-    }
+    MessageBoxW(g_hwndTimeline, L"Checkpoint saved.", L"Done", MB_OK);
+    PopulateList();
 }
 
 static void OnDeleteSelected() {
@@ -306,7 +222,6 @@ static void OnDeleteSelected() {
     wchar_t* id = (wchar_t*)item.lParam;
     if (!id) return;
 
-    TimelineSummary sum;
     TimelineSnapshot snap;
     Timeline_Load(id, &snap); // Just to get the name
     wchar_t msg[256];

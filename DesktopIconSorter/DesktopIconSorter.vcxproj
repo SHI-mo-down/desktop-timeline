@@ -48,7 +48,6 @@
     <ClCompile Include="src\core\grid_system.cpp" />
     <ClCompile Include="src\core\sort_engine.cpp" />
     <ClCompile Include="src\core\config_manager.cpp" />
-    <ClCompile Include="src\core\snapshot_manager.cpp" />
     <ClCompile Include="src\core\timeline_db.cpp" />
     <ClCompile Include="src\core\timeline_engine.cpp" />
     <ClCompile Include="src\core\rule_engine.cpp" />
@@ -64,7 +63,6 @@
     <ClInclude Include="src\core\grid_system.h" />
     <ClInclude Include="src\core\sort_engine.h" />
     <ClInclude Include="src\core\config_manager.h" />
-    <ClInclude Include="src\core\snapshot_manager.h" />
     <ClInclude Include="src\core\timeline_record.h" />
     <ClInclude Include="src\core\timeline_db.h" />
     <ClInclude Include="src\core\timeline_engine.h" />

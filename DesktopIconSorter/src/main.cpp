@@ -14,7 +14,6 @@
 #include "core/grid_system.h"
 #include "core/sort_engine.h"
 #include "core/config_manager.h"
-#include "core/snapshot_manager.h"
 #include "core/timeline_record.h"
 #include "core/timeline_db.h"
 #include "core/timeline_engine.h"
@@ -56,7 +55,6 @@ void InitPaths() {
     wchar_t* lastSlash = wcsrchr(g_exeDir, L'\\');
     if (lastSlash) *(lastSlash + 1) = 0;
     wsprintfW(g_configPath, L"%sdesktop_sorter_config.json", g_exeDir);
-    Snapshot_Init(g_exeDir);
     Timeline_Init(g_exeDir);
 }
 
@@ -123,7 +121,7 @@ static SortResult SortIcons(int sortMode) {
 }
 
 void DoSort() {
-    Snapshot_AutoSave();
+    TimelineEngine_ForceRecord(); // pre-sort safety net
     SortIcons(-1);
     Sleep(1000);
     RefreshDesktopView();
@@ -493,11 +491,6 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
                 PrintWF(L"  Icon '%ls' not found\n", argv[2]);
         }
     }
-    else if (_wcsicmp(argv[1], L"/checkpoint") == 0) {
-        TimelineEngine_Init(g_exeDir, TimelineConfig::Default(), TimelineSaveSnapshot, nullptr);
-        std::wstring id = TimelineEngine_ForceRecord();
-        PrintWF(L"  Checkpoint: %s\n", id.c_str());
-    }
     else if (_wcsicmp(argv[1], L"/list") == 0) {
         Timeline_Init(g_exeDir);
         auto list = Timeline_List(50);
@@ -516,18 +509,37 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
         PrintWF(L"  Icons: %d  Sorted: %d\n", sr.totalIcons, sr.iconsSorted);
     }
     else if (_wcsicmp(argv[1], L"/snap") == 0 && argc >= 3) {
-        if (_wcsicmp(argv[2], L"save") == 0 && argc >= 4) {
-            Snapshot_Save(argv[3]); wprintf(L"  '%s' saved\n", argv[3]);
-        } else if (_wcsicmp(argv[2], L"list") == 0) {
-            auto sl = Snapshot_List();
-            for (size_t i = 0; i < sl.size(); i++)
-                wprintf(L"  [%zu] %s  %d icons\n", i, sl[i].name, sl[i].iconCount);
+        if (_wcsicmp(argv[2], L"save") == 0) {
+            wchar_t autoName[32];
+            const wchar_t* name = nullptr;
+            if (argc >= 4) {
+                name = argv[3];
+            } else {
+                SYSTEMTIME st;
+                GetLocalTime(&st);
+                wsprintfW(autoName, L"%02d%02d_%02d%02d", st.wMonth, st.wDay, st.wHour, st.wMinute);
+                name = autoName;
+            }
+            std::wstring id = TimelineEngine_SaveCheckpoint(name);
+            if (!id.empty()) PrintWF(L"  Saved as %s\n", id.c_str());
+            else Log("  Save failed");
         } else if (_wcsicmp(argv[2], L"restore") == 0 && argc >= 4) {
-            wchar_t fp[MAX_PATH];
-            wsprintfW(fp, L"%s\\snapshots\\manual\\%s.snap", g_exeDir, argv[3]);
-            Log(Snapshot_Restore(fp) ? "  Restored" : "  Failed");
+            wchar_t id[160];
+            Timeline_MakeCheckpointId(argv[3], id, 160);
+            int n = TimelineEngine_Restore(id);
+            if (n >= 0) PrintWF(L"  Restored %d icons\n", n);
+            else Log("  Restore failed (checkpoint not found)");
         } else if (_wcsicmp(argv[2], L"undo") == 0) {
-            Log(Snapshot_Undo() ? "  Undo done" : "  Nothing to undo");
+            TimelineSummary sum;
+            if (Timeline_GetLatest(&sum)) {
+                int n = TimelineEngine_Restore(sum.id.c_str());
+                if (n >= 0) PrintWF(L"  Undid to latest snapshot (%d icons)\n", n);
+                else Log("  Undo failed");
+            } else {
+                Log("  Nothing to undo");
+            }
+        } else {
+            Log("Usage: /snap save [name] | restore <name> | undo  (list: /list)");
         }
     }
 

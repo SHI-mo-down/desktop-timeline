@@ -166,6 +166,32 @@ LayoutApplyResult LayoutEngine_ApplyFile(const wchar_t* jsonPath, bool dryRun) {
     return LayoutEngine_ApplyJson(Json_ReadFileUtf8(jsonPath), dryRun);
 }
 
+int LayoutEngine_ApplyPairs(const std::vector<std::pair<std::wstring, POINT>>& targets) {
+    if (targets.empty()) return 0;
+
+    auto pidlMap = BuildPidlMap();
+    if (pidlMap.empty()) return -1;
+
+    ComPtr<IFolderView> fv;
+    HRESULT hr = GetDesktopFolderView(&fv);
+
+    int moved = 0;
+    if (SUCCEEDED(hr)) {
+        for (const auto& [name, pt] : targets) {
+            PITEMID_CHILD pidl = FindPidl(pidlMap, name.c_str());
+            if (!pidl) continue;
+            POINT p = pt;
+            if (SUCCEEDED(fv->SelectAndPositionItems(
+                    1, (PCUITEMID_CHILD*)&pidl, &p, SVSI_POSITIONITEM)))
+                moved++;
+        }
+        RefreshDesktopView();
+    }
+
+    for (auto& [_, pidl] : pidlMap) CoTaskMemFree(pidl);
+    return SUCCEEDED(hr) ? moved : -1;
+}
+
 bool LayoutEngine_MoveIcon(const wchar_t* name, int col, int row) {
     if (!name || !name[0] || col < 0 || row < 0) return false;
     POINT gp;
