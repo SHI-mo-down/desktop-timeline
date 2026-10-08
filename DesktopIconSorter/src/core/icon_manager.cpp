@@ -53,6 +53,58 @@ int GetDesktopIconCount() {
     return count;
 }
 
+std::vector<DesktopIcon> GetDesktopIcons() {
+    std::vector<DesktopIcon> icons;
+
+    ComPtr<IFolderView> spFolderView;
+    if (FAILED(GetDesktopFolderView(&spFolderView))) return icons;
+
+    IShellFolder* sf = nullptr;
+    if (FAILED(spFolderView->GetFolder(IID_IShellFolder, (void**)&sf))) return icons;
+
+    IEnumIDList* spEnum = nullptr;
+    if (FAILED(spFolderView->Items(SVGIO_ALLVIEW, IID_IEnumIDList, (void**)&spEnum))) {
+        sf->Release();
+        return icons;
+    }
+
+    PITEMID_CHILD pidl = nullptr;
+    ULONG fetched = 0;
+    while (spEnum->Next(1, &pidl, &fetched) == S_OK && fetched > 0) {
+        if (pidl) {
+            DesktopIcon icon = {};
+            STRRET strret;
+
+            wchar_t name[MAX_PATH] = L"";
+            if (SUCCEEDED(sf->GetDisplayNameOf(pidl, SHGDN_NORMAL, &strret)))
+                StrRetToBuf(&strret, pidl, name, MAX_PATH);
+            icon.name = name;
+
+            wchar_t path[MAX_PATH] = L"";
+            if (SUCCEEDED(sf->GetDisplayNameOf(pidl, SHGDN_FORPARSING, &strret)))
+                StrRetToBuf(&strret, pidl, path, MAX_PATH);
+            icon.path = path;
+
+            POINT pt = {0, 0};
+            spFolderView->GetItemPosition(pidl, &pt);
+            icon.x = pt.x;
+            icon.y = pt.y;
+
+            DWORD attrs = SFGAO_FOLDER;
+            sf->GetAttributesOf(1, (PCUITEMID_CHILD*)&pidl, &attrs);
+            icon.isFolder = (attrs & SFGAO_FOLDER) != 0;
+
+            icons.push_back(icon);
+            CoTaskMemFree(pidl);
+            pidl = nullptr;
+        }
+    }
+
+    spEnum->Release();
+    sf->Release();
+    return icons;
+}
+
 HRESULT SaveIconPositions(const wchar_t* filePath) {
     ComPtr<IFolderView> spFolderView;
     HRESULT hr = GetDesktopFolderView(&spFolderView);

@@ -17,6 +17,9 @@
 #include "core/timeline_record.h"
 #include "core/timeline_db.h"
 #include "core/timeline_engine.h"
+#include "core/desktop_state.h"
+#include "core/screenshot.h"
+#include "utils/console.h"
 #include "ui/timeline_ui.h"
 #include "ui/resource.h"
 #include "core/rule_engine.h"
@@ -257,21 +260,31 @@ int RunTrayMode(HINSTANCE hInstance) {
 // ── Console mode ──
 int RunConsoleMode(int argc, wchar_t* argv[]) {
     InitPaths();
-    if (GetConsoleWindow() == nullptr) { AllocConsole(); freopen("CONOUT$", "w", stdout); }
+    // Take over a console only when run without one (e.g. double-click).
+    // When stdout is piped/redirected (CLI scripting, MCP), keep writing there.
+    DWORD outType = GetFileType(GetStdHandle(STD_OUTPUT_HANDLE));
+    bool interactive = (outType == FILE_TYPE_CHAR);
+    if (outType == FILE_TYPE_UNKNOWN) {
+        AllocConsole();
+        freopen("CONOUT$", "w", stdout);
+        interactive = true;
+    }
 
     Log("Desktop Timeline — Layout Memory");
     Log("==================================");
 
     if (argc < 2) {
         Log("Commands:");
+        Log("  /dump          Export desktop state as JSON (desktop_state.json)");
+        Log("  /shot          Screenshot desktop + state JSON (for LLM workflow)");
         Log("  /timeline      Open timeline panel");
         Log("  /checkpoint    Save a checkpoint");
         Log("  /list          List all snapshots");
         Log("  /tray          Start system tray (auto monitor)");
         Log("  /sort          Sort icons (legacy)");
         Log("  /snap <cmd>    Legacy snapshot operations");
-        system("pause > nul");
-        if (GetConsoleWindow() != nullptr) FreeConsole();
+        if (interactive) system("pause > nul");
+        if (outType == FILE_TYPE_UNKNOWN) FreeConsole();
         return 0;
     }
 
@@ -286,6 +299,33 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
         Log("Opening Timeline...");
         TimelineUI_Show(GetModuleHandleW(nullptr), nullptr, g_exeDir);
         system("pause > nul");
+    }
+    else if (_wcsicmp(argv[1], L"/dump") == 0) {
+        GridSystem_Init();
+        wchar_t outPath[MAX_PATH];
+        wsprintfW(outPath, L"%sdesktop_state.json", g_exeDir);
+        int n = DesktopState_Export(outPath);
+        if (n >= 0) {
+            wchar_t msg[512];
+            swprintf_s(msg, L"  Exported %d icons to %s\n", n, outPath);
+            Console_PrintW(msg);
+        } else {
+            Log("  Export failed - cannot read desktop icons");
+        }
+    }
+    else if (_wcsicmp(argv[1], L"/shot") == 0) {
+        GridSystem_Init();
+        wchar_t pngPath[MAX_PATH], jsonPath[MAX_PATH];
+        wsprintfW(pngPath, L"%sdesktop.png", g_exeDir);
+        wsprintfW(jsonPath, L"%sdesktop_state.json", g_exeDir);
+        DesktopState_Export(jsonPath);
+        if (Desktop_Screenshot(pngPath)) {
+            wchar_t msg[512];
+            swprintf_s(msg, L"  Screenshot saved to %s\n", pngPath);
+            Console_PrintW(msg);
+        } else {
+            Log("  Screenshot failed");
+        }
     }
     else if (_wcsicmp(argv[1], L"/checkpoint") == 0) {
         TimelineEngine_Init(g_exeDir, TimelineConfig::Default(), TimelineSaveSnapshot, nullptr);
@@ -331,9 +371,8 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
     }
 
     CoUninitialize();
-    if (GetConsoleWindow() != nullptr) {
-        Log(""); system("pause > nul"); FreeConsole();
-    }
+    if (interactive) { Log(""); system("pause > nul"); }
+    if (outType == FILE_TYPE_UNKNOWN) FreeConsole();
     return 0;
 }
 

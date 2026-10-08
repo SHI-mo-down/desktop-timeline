@@ -2,6 +2,7 @@
 #pragma once
 #include <Windows.h>
 #include <shlobj.h>
+#include <string>
 #include <vector>
 #include "../utils/com_ptr.h"
 
@@ -20,3 +21,14 @@ HRESULT RestoreIconPositions(const wchar_t* filePath);
 
 // Get current desktop icon count
 int GetDesktopIconCount();
+
+// Full icon info for state export / LLM bridge
+struct DesktopIcon {
+    std::wstring name;
+    std::wstring path;   // filesystem path, or ::{CLSID} for virtual items
+    int x, y;
+    bool isFolder;
+};
+
+// Enumerate all desktop icons with name, path, and position
+std::vector<DesktopIcon> GetDesktopIcons();

@@ -53,6 +53,8 @@
     <ClCompile Include="src\core\timeline_engine.cpp" />
     <ClCompile Include="src\core\rule_engine.cpp" />
     <ClCompile Include="src\core\cleanup_policy.cpp" />
+    <ClCompile Include="src\core\desktop_state.cpp" />
+    <ClCompile Include="src\core\screenshot.cpp" />
     <ClCompile Include="src\ui\timeline_ui.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClInclude Include="src\core\icon_manager.h" />
@@ -65,9 +67,12 @@
     <ClInclude Include="src\core\timeline_engine.h" />
     <ClInclude Include="src\core\rule_engine.h" />
     <ClInclude Include="src\core\cleanup_policy.h" />
+    <ClInclude Include="src\core\desktop_state.h" />
+    <ClInclude Include="src\core\screenshot.h" />
     <ClInclude Include="src\ui\timeline_ui.h" />
     <ClInclude Include="src\ui\resource.h" />
     <ClInclude Include="src\utils\com_ptr.h" />
+    <ClInclude Include="src\utils\console.h" />
     <Manifest Include="app.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
