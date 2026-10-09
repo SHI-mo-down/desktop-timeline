@@ -68,6 +68,8 @@ bool Timeline_Save(const TimelineSnapshot& snapshot) {
     _wfopen_s(&fp, tmpPath, L"w, ccs=UTF-8");
     if (!fp) return false;
 
+    int closeRc = 0; // declared up front: gotos below must not skip it
+
     if (fwprintf(fp, L"# Desktop Layout Timeline\n") < 0 ||
         fwprintf(fp, L"Version: 1\n") < 0 ||
         fwprintf(fp, L"Timestamp: %s\n", snapshot.timestamp.c_str()) < 0 ||
@@ -94,8 +96,11 @@ bool Timeline_Save(const TimelineSnapshot& snapshot) {
             safeName, icon.x, icon.y, icon.gridRow, icon.gridCol) < 0) goto writeFail;
     }
 
-    if (fclose(fp) != 0) goto writeFail;
+    // null before the check: fclose dissociates the stream even on failure,
+    // so writeFail must not close it again
+    closeRc = fclose(fp);
     fp = nullptr;
+    if (closeRc != 0) goto writeFail;
 
     if (!MoveFileExW(tmpPath, filePath, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         DeleteFileW(tmpPath);
@@ -219,9 +224,11 @@ std::vector<TimelineSummary> Timeline_List(int maxCount) {
             sum.id = searchPath;
             sum.isCheckpoint = isCheckpoint;
 
-            // Format timestamp from file time
+            // Format timestamp from file time (FILETIME is UTC; convert)
             SYSTEMTIME st;
-            FileTimeToSystemTime(&fd.ftCreationTime, &st);
+            FILETIME ftLocal;
+            FileTimeToLocalFileTime(&fd.ftCreationTime, &ftLocal);
+            FileTimeToSystemTime(&ftLocal, &st);
             wchar_t ts[64];
             wsprintfW(ts, L"%04d-%02d-%02dT%02d:%02d:%02d",
                      st.wYear, st.wMonth, st.wDay,

@@ -29,9 +29,10 @@ bool Desktop_CreateShortcut(const wchar_t* name, const wchar_t* target,
                             const wchar_t* iconPath);
 
 // ── Item ops ──
-// Rename a desktop item by display name. File extension is preserved
-// (.lnk etc.) unless already typed. System icons (::{CLSID}) are refused.
+// Rename a desktop item by display name. The extension is kept when the
+// new name has none of its own ("notes" keeps .txt); system icons and the
+// user profile root are refused.
 bool Desktop_RenameIcon(const wchar_t* name, const wchar_t* newName);
 // Delete a desktop item by display name: moves it to the recycle bin
-// (undoable). System icons are refused.
+// (undoable). System icons and the profile root are refused.
 bool Desktop_DeleteIcon(const wchar_t* name);

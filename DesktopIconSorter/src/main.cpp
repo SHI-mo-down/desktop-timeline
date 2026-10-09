@@ -24,7 +24,6 @@
 #include "core/mcp_server.h"
 #include "utils/console.h"
 #include "ui/timeline_ui.h"
-#include "ui/resource.h"
 
 #pragma comment(lib, "comctl32.lib")
 
@@ -291,16 +290,17 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
         Log("    spacing <h> <v> (pixels)");
         Log("    sysicon thispc|recycle|network|controlpanel|userfiles on|off");
         Log("  /shortcut <name> <target> [args] [workdir] [icon]  Create desktop shortcut");
+        Log("  /rename <name> <new_name>   Rename a desktop item (extension kept)");
+        Log("  /delete <name>              Delete an item (to recycle bin)");
         Log("  /layout save <file>    Export current layout");
         Log("  /layout apply <file>   Move icons per layout file (dump JSON format)");
         Log("  /layout check <file>   Dry-run: report without moving");
         Log("  /move <name> <col> <row>  Move one icon to grid position");
         Log("  /timeline      Open timeline panel");
-        Log("  /checkpoint    Save a checkpoint");
+        Log("  /snap save [name] | restore <name> | undo   Snapshots (safety net)");
         Log("  /list          List all snapshots");
         Log("  /tray          Start system tray (auto monitor)");
         Log("  /sort          Sort icons (legacy)");
-        Log("  /snap <cmd>    Legacy snapshot operations");
         if (interactive) system("pause > nul");
         if (outType == FILE_TYPE_UNKNOWN) FreeConsole();
         return 0;
@@ -492,7 +492,8 @@ int RunConsoleMode(int argc, wchar_t* argv[]) {
             } else {
                 SYSTEMTIME st;
                 GetLocalTime(&st);
-                wsprintfW(autoName, L"%02d%02d_%02d%02d", st.wMonth, st.wDay, st.wHour, st.wMinute);
+                wsprintfW(autoName, L"%02d%02d_%02d%02d%02d", st.wMonth, st.wDay,
+                          st.wHour, st.wMinute, st.wSecond);
                 name = autoName;
             }
             std::wstring id = TimelineEngine_SaveCheckpoint(name);

@@ -210,29 +210,34 @@ static const DesktopIcon* FindIconByName(const std::vector<DesktopIcon>& v,
     return nullptr;
 }
 
+// The shell's "User files" icon maps to the profile root; treat it (and any
+// other real path outside a desktop) as off-limits even if a shell version
+// ever enumerates it with a real path instead of ::{CLSID}
+static bool IsProtectedPath(const std::wstring& path) {
+    wchar_t profile[MAX_PATH] = L"";
+    if (!GetEnvironmentVariableW(L"USERPROFILE", profile, MAX_PATH)) return false;
+    return _wcsicmp(path.c_str(), profile) == 0;
+}
+
 bool Desktop_RenameIcon(const wchar_t* name, const wchar_t* newName) {
     if (!name || !*name || !newName || !*newName) return false;
     if (wcspbrk(newName, L"\\/:*?\"<>|") || wcslen(newName) > 200) return false;
 
     auto icons = GetDesktopIcons();
     const DesktopIcon* ic = FindIconByName(icons, name);
-    if (!ic || ic->path.rfind(L"::", 0) == 0) return false; // system icon
+    if (!ic || ic->path.rfind(L"::", 0) == 0 || IsProtectedPath(ic->path)) return false;
 
     std::wstring oldPath = ic->path;
     size_t slash = oldPath.find_last_of(L'\\');
     if (slash == std::wstring::npos) return false;
 
-    // keep the original extension unless the caller already typed it;
-    // for folders there is none, and a leading dot (.gitignore) is not one
+    // keep the original extension when the new name has none of its own:
+    // "notes" + old .txt -> notes.txt, but "notes.md" is taken as typed
     std::wstring base = newName;
-    if (!ic->isFolder) {
+    if (!ic->isFolder && base.find(L'.') == std::wstring::npos) {
         size_t dot = oldPath.find_last_of(L'.');
-        if (dot != std::wstring::npos && dot > slash + 1) {
-            std::wstring ext = oldPath.substr(dot);
-            bool hasExt = base.size() > ext.size() &&
-                _wcsicmp(base.c_str() + base.size() - ext.size(), ext.c_str()) == 0;
-            if (!hasExt) base += ext;
-        }
+        if (dot != std::wstring::npos && dot > slash + 1)
+            base += oldPath.substr(dot);
     }
     std::wstring newPath = oldPath.substr(0, slash + 1) + base;
 
@@ -247,7 +252,7 @@ bool Desktop_DeleteIcon(const wchar_t* name) {
 
     auto icons = GetDesktopIcons();
     const DesktopIcon* ic = FindIconByName(icons, name);
-    if (!ic || ic->path.rfind(L"::", 0) == 0) return false; // system icon
+    if (!ic || ic->path.rfind(L"::", 0) == 0 || IsProtectedPath(ic->path)) return false;
 
     std::wstring from = ic->path;
     from.push_back(L'\0'); // SHFileOperation wants a double-null list

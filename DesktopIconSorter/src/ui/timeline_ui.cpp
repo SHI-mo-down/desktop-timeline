@@ -8,8 +8,6 @@
 #include <CommCtrl.h>
 #include <uxtheme.h>
 #include <stdio.h>
-#include <shlwapi.h>
-#include <shellapi.h>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "uxtheme.lib")
@@ -174,13 +172,17 @@ static void OnRestore() {
     {
         SYSTEMTIME st; GetLocalTime(&st);
         wchar_t name[64];
-        wsprintfW(name, L"%02d%02d_%02d%02d", st.wMonth, st.wDay, st.wHour, st.wMinute);
+        wsprintfW(name, L"%02d%02d_%02d%02d%02d", st.wMonth, st.wDay,
+                  st.wHour, st.wMinute, st.wSecond);
         TimelineEngine_SaveCheckpoint(name);
     }
 
     int restored = TimelineEngine_Restore(id);
     if (restored < 0) {
-        MessageBoxW(g_hwndTimeline, L"Could not access desktop icons.", L"Error", MB_OK);
+        MessageBoxW(g_hwndTimeline,
+            L"Restore failed: no matching icons (renamed or deleted since?) "
+            L"or the desktop is unreadable.",
+            L"Error", MB_OK);
         return;
     }
 
@@ -195,8 +197,8 @@ static void OnSaveCheckpoint() {
 
     SYSTEMTIME st; GetLocalTime(&st);
     wchar_t displayName[64];
-    wsprintfW(displayName, L"Checkpoint %02d-%02d %02d:%02d",
-             st.wMonth, st.wDay, st.wHour, st.wMinute);
+    wsprintfW(displayName, L"Checkpoint %02d-%02d %02d:%02d:%02d",
+             st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 
     std::wstring id = TimelineEngine_SaveCheckpoint(displayName);
     if (id.empty()) {
@@ -295,11 +297,19 @@ static void OnRenameSelected() {
                 wchar_t newName[128];
                 GetWindowTextW(hEdit, newName, 128);
                 if (newName[0]) {
+                    std::wstring oldId = id;
                     snap.name = newName;
-                    // Delete old file, save with new name (id stays same, name changes)
-                    Timeline_Delete(id);
-                    Timeline_Save(snap);
-                    PopulateList();
+                    // Save first, delete the old id only after it lands
+                    if (Timeline_Save(snap)) {
+                        wchar_t newId[160];
+                        Timeline_MakeCheckpointId(newName, newId, 160);
+                        if (wcscmp(oldId.c_str(), newId) != 0)
+                            Timeline_Delete(oldId.c_str());
+                        PopulateList();
+                    } else {
+                        MessageBoxW(g_hwndTimeline, L"Failed to save renamed checkpoint.",
+                                    L"Error", MB_OK);
+                    }
                 }
             }
             DestroyWindow(hDlg);

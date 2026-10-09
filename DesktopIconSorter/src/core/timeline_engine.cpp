@@ -3,12 +3,7 @@
 #include "timeline_db.h"
 #include "icon_manager.h"
 #include "layout_engine.h"
-#include <shlwapi.h>
-#include "../utils/com_ptr.h"
-#include <stdio.h>
 #include <time.h>
-#include <set>
-#include <map>
 #include <utility>
 #include <vector>
 #include "cleanup_policy.h"
@@ -341,7 +336,10 @@ int TimelineEngine_Restore(const wchar_t* snapshotId) {
     pairs.reserve(snap.icons.size());
     for (const auto& ic : snap.icons)
         pairs.push_back({ic.name, {ic.x, ic.y}});
-    return LayoutEngine_ApplyPairs(pairs);
+    // 0 matched means the snapshot's icons are all gone/renamed: a failed
+    // restore, not a successful no-op
+    int n = LayoutEngine_ApplyPairs(pairs);
+    return n > 0 ? n : -1;
 }
 
 void TimelineEngine_UpdateConfig(const TimelineConfig& cfg) { g_config = cfg; }

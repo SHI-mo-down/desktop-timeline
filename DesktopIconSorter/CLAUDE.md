@@ -51,7 +51,7 @@ test_mcp.py             end-to-end MCP test (moves one icon, restores it)
 /set iconsize <px|small|medium|large>   /set spacing <h> <v>
 /set sysicon thispc|recycle|network|controlpanel|userfiles on|off
 /shortcut <name> <target> [args] [workdir] [icon]
-/rename <name> <new_name>        extensions preserved
+/rename <name> <new_name>        keeps extension unless the new name has one
 /delete <name>                   to recycle bin (undoable)
 /layout save|apply|check <file>  apply: exact x/y wins over col/row
 /move <name> <col> <row>

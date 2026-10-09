@@ -99,7 +99,7 @@ Layout format (grid cells, or exact x/y pixels — pixels win):
 | `move_icon` | One icon → grid cell |
 | `apply_layout` | Many icons → cells or pixels (`dry_run` to preview) |
 | `create_shortcut` | New .lnk on the desktop |
-| `rename_icon` | Rename an item (extension preserved) |
+| `rename_icon` | Rename an item (extension kept unless typed) |
 | `delete_icon` | Delete an item (recycle bin) |
 | `set_autoarrange` / `set_snapgrid` | Layout toggles |
 | `set_iconsize` / `set_spacing` | Icon metrics |
@@ -109,7 +109,7 @@ Layout format (grid cells, or exact x/y pixels — pixels win):
 ## Build from Source
 
 ```bash
-# Visual Studio 2022+ (v145 toolset), from DesktopIconSorter/
+# Visual Studio 2026 with the v145 toolset, from DesktopIconSorter/
 msbuild DesktopIconSorter.vcxproj /p:Configuration=Release /p:Platform=x64
 
 python test_mcp.py    # end-to-end MCP test (moves one icon, restores it)
